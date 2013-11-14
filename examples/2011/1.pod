@@ -1,0 +1,126 @@
+=head1 2011 Reflections - 5.90 and beyond.
+
+Uh-oh, December 1st - time does indeed fly, and it's time to recap what
+has happened in our-favourite-web-framework-land.
+
+It is my honour to start off this year's Advent Calendar with a recap about
+what's happened in the last 12 months in Catalyst land, and what's coming
+up in the next 12 months.
+
+=head2 The Past
+
+Catalyst has been around for quite a while now (I've been using it for over 5
+years, and I still feel like a newbie at times). I'm going to spare you a lengthy
+history lesson, however this time last year, we were still talking about the cool
+things you could do with version 5.80.
+
+In the last year, we've released the next major version of Catalyst, version
+5.90001 (and we've since released another 6 minor releases). Unusually for a major
+release, 5.90001 contains B<less> code than the last major release of Catalyst 5.80
+(5.80033).. By 88 lines.
+
+Hmmm, that statistic was a little less impressive than I was hoping for when I went
+to find it...
+
+The point I was looking to make was that we lost a massive amount of code (and the
+associated maintenance burden, by removing all the Catalyst::Engine code, and replacing
+it with L<Plack>).
+
+A more real comparison would be to look at the diffstat for these engine classes:
+
+    lib/Catalyst/Engine.pm         |  247 +++++++++++++---
+    lib/Catalyst/Engine/CGI.pm     |  328 --------------------
+    lib/Catalyst/Engine/FastCGI.pm |  663 ----------------------------------------
+    lib/Catalyst/Engine/HTTP.pm    |  579 -----------------------------------
+    lib/Catalyst/EngineLoader.pm   |  159 ++++++++++
+
+That's over eleven hundred lines of code removed. Quite a significant reduction!
+
+The reason the 'real' change is much much lower, is, of course that doing this port has
+involved the addition of a significant quantity of tests and a not insignificant amount
+of documentation about upgrading.
+
+So, the core of Catalyst lost code, and that makes it nicer for the Catalyst developers..
+
+But how is that interesting for users?
+
+Well, you can now add a C<.psgi> file to your Catalyst application, and then take advantage
+of any Plack middleware you'd like to. This means that you can do anything from arranging for
+your static files to get concatenated automatically, to mounting entire sub-applications
+within or alongside your app.
+
+It also means that a much greater choice of web server engines is possible than ever
+before, as any Plack server can be used. See L<Catalyst::PSGI> for further details.
+
+This includes asynchronous servers, and brings us to the present:
+
+=head2 The Present
+
+The 5.90 series is now nicely stabilised, and we've been actually implementing a set of
+long promised deprecations and removals to keep things moving forwards (by reducing
+and cleaning up old code).
+
+We're currently working on refactoring the internals to move state from the engine
+into the request, which will enable us to handle requests entirely asynchronously.
+This code should be in a TRIAL release near you within the next few days, and I'm
+hoping to be able to write a further advent article about asynchronous Catalyst.
+
+In parallel with this, this year's Google summer of code project has produced the
+next development branch, which nicely leads onto:
+
+=head2 The Future
+
+The next major version of Catalyst is planning to concentrate on improving the
+limited component loading facilities within Catalyst currently.
+
+Catalyst B<is> extremely pluggable, and one of it's more powerful features is
+the ability to customise the component loading process.
+
+By default, we write components outside the application, and bind them in using
+L<Catalyst::Model::Adaptor> (or the lower level C<COMPONENT> hook if you'd prefer
+to do it manually). You can further customise things per request with
+components such as L<Catalyst::Component::InstancePerContext> (or by using the
+lower level C<ACCEPT_CONTEXT> hook if preferred).
+
+This gives you an amazing amount of flexibility, but in many ways it fails to be
+obvious and declarative enough. If you want to have multiple components in your
+application that depend on each other, then your choices are to either manually
+hack to component load order (so they're initialised in the correct sequence),
+or to make them all 'per request'.
+
+The new branch makes this all much more declearative by outsourcing all of the
+inversion of control code out to L<Bread::Board>. Using the planned new sugar
+syntax, you'll be able to declare dependencies in your application like this:
+
+    container {
+        model {
+            component 'Foo' => (
+                    class        => 'Foo',
+                    lifecycle    => 'PerRequest',
+                    dependencies => {
+                        config(),
+                        bar => depends_on('Bar'),
+                    }
+            );
+            component 'Bar' => (
+                    class        => 'Bar',
+                    lifecycle    => 'Singleton',
+            );
+        };
+    };
+
+And, of course, if you want or need to - you'll be able to override and
+customise the component loading process in a pluggable way, so whilst common
+problems will become much easier (and cleaner) to solve, a lot more power
+will be available to those who need it.
+
+It's been an exciting last year, and it's going to be an exciting year ahead for
+Catalyst.
+
+Cheers!
+
+-- t0m
+
+=head1 AUTHOR
+
+Tomas Doran <bobtfish@bobtfish.net>

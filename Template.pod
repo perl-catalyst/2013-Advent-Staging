@@ -1,0 +1,24 @@
+=head1 $TITLE
+
+=head1 OVERVIEW
+
+This should be a short summary explaining what someone reading this article would learn and
+what problem they would be able to solve.
+
+=head1 $SECTIONS
+
+As many sections as neeed to complete the article!
+
+=head1 For More Information
+
+Where to go to learn more, for example links to CPAN distributions or source code on Github
+
+=head1 Summary
+
+Review of what the reader just learned.
+
+=head1 Author
+
+Your Name <your@email.com> IRC nick
+
+=cut

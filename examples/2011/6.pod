@@ -1,0 +1,226 @@
+=head1 Using Plack Middleware for Better Database Debugging
+
+=head1 Overview
+
+This is a short article that shows how one can use the new L<Plack> based
+L<Catalyst> to integrate middleware components designed to assist developers
+understand how your database is performing.  We also will discuss how having
+L<Plack> as a core L<Catalyst> technology can assist us in broadening our
+software ecosystem and involve a larger developer base.  An example of the
+approach taken to port a L<Catalyst> specific role to L<Plack> middleware is
+given.
+
+The distributions discussed will include: L<Plack::Middleware::DBIC::QueryLog>,
+L<Plack::Middleware::Debug::DBIC::QueryLog> and a trait for the L<Catalyst>
+L<DBIx::Class> model (L<Catalyst::Model::DBIC::Schema>) called
+L<Catalyst::TraitFor::Model::DBIC::Schema::QueryLog::AdoptPlack>.
+
+Additionally, having some familiarity with L<Plack> and with its debugging
+middleware, L<Plack::Middleware::Debug> would be valuable.
+
+=head1 Catalyst and Plack
+
+One of the things that has been great about being a L<Catalyst> developer is in
+how the project has been both able to maintain long term backward compatibility
+as well as adopt Perl / CPAN's latest and greatest.  For example, a few years
+ago we ported the L<Catalyst> codebase to L<Moose>.  This gave us a solid base
+not only for the core L<Catalyst> code, but for people building websites on top
+of it.
+
+Recently we completed the project to port L<Catalyst> to use L<Plack> as a core
+technology.  I believe this will have a powerful impact on our future coding
+goals, since it will allow us to concentrate our available programming talent
+on the things that make L<Catalyst> the most powerful and flexible MVC system
+for Perl.  Over time I foresee much of what lives in the L<Catalyst::Plugin>
+namespace become simple wrappers on top of L<Plack::Middleware>  This is a
+total win - win situation since it means we have less code that is specific to
+L<Catalyst> (meaning even more time for core developers to spend on the most
+unique aspect of L<Catalyst>) and it also means that we can levage the concentrated
+efforts of developers across the CPAN ecosystem.  Not everyone is a L<Catalyst>
+developer, and even those of us that are don't always need the full power and
+complexity of L<Catalyst>.  Having more code in Plack Middleware means that on
+those projects where I want a more light weight approach (such as L<Web::Simple>)
+I have access to the same tools as I do with L<Catalyst> for solving common
+problems like authentication and sessioning.
+
+=head1 Integrating Plack::Middleware::Debug::DBIC::QueryLog with Catalyst
+
+If you have been using L<Catalyst> and L<DBIx::Class> for a while, you probably
+have used L<DBIx::Class::QueryLog>, which is a great tool for giving you better
+insight into how your database is performing.  For quite a while we've had
+L<Catalyst::TraitFor::Model::DBIC::Schema::QueryLog>, which is a trait that
+enables querylogging per request to your L<Catalyst> application.  However this
+great feature is locked into L<Catalyst> using this approach.  Instead, let's
+see what can happen if we extract that functionality.
+
+=head2 Plack::Middleware::DBIC::QueryLog
+
+L<Plack::DBIC::QueryLog> is a simple bit of L<Plack> middleware that places an
+instance of L<DBIx::Class::QueryLog> into your L<Plack> C<$env> under the key
+C<plack.middleware.dbic.querylog>.  It also exposes some helper methods designed
+to be a consistent interface for finding and creating that key.  Here's how it
+might look in your application:
+
+    use Plack::Builder;
+    use MyDatabaseEnabledCatalystApplication;
+
+    my $app = MyDatabaseEnabledCatalystApplication->psgi_app;
+
+    builder {
+      enable 'DBIC::QueryLog';
+      $app;
+    };
+
+Now when you startup the application using C<plackup> your will have a fresh
+instance of L<DBIx::Class::QueryLog> available for logging.
+
+This middleware accepts arguments which match the interface given in
+L<DBIx::Class::QueryLog>.  Anything that you can pass to the C<new> method
+of that class you can set via C<querylog_args>:
+
+    builder {
+      enable 'DBIC::QueryLog',
+        querylog_args => {passthrough => 1};
+      $app;
+    };
+
+C<passthrough> is one of the more useful options, since it makes sure that the
+querylog allows any database events it intercepts pass through down to whatever
+logging you might be doing at your L<Catalyst> application level.  In many
+cases when you are developing you might use the C<DBIC_TRACE> environment
+variable to help you understand what L<DBIx::Class> is doing (in addition to
+the Querylogger).  Setting the passthrough option will allow you to do both.
+
+=head2 Catalyst::TraitFor::Model::DBIC::Schema::QueryLog::AdoptPlack
+
+Next, lets look at how to get this new querylog exposed to L<Catalyst>.  If
+you are using L<DBIx::Class> with L<Catalyst>, you are probably using
+L<Catalyst::Model::DBIC::Schema>.  This model gives you the basic functionality
+to connect to a database and expose your DBIC classes to your L<Catalyst>
+application.  It also has a clean interface for extending its functionality,
+which is based on L<Moose> and L<Moose::Role>.  Basically you can wrap traits
+(which are just L<Moose::Role>s) at setup on top of your Catalyst DBIC
+model.  Since this is a configuration option, this means that you can have
+different traits applied in different environments.  For example, in production
+you might be using replication, and you'd apply the trait
+L<Catalyst::TraitFor::Model::DBIC::Schema::Replicated>.  On the flip side, in
+development you might want to use the querylogger to help developers understand
+bottlenecks in their SQL.  Here's an example:
+
+Assuming you have a class called L<MyDatabaseEnabledCatalystApplication::Model::Schema>
+which looks something like this:
+
+    package MyDatabaseEnabledCatalystApplication::Model::Schema;
+    use parent 'Catalyst::Model::DBIC::Schema';
+
+    1;
+
+Then, in your configuration file, you have something like this (assuming you
+are using the standard L<Config::General>)
+
+    <Model::Schema>
+        schema_class   MyDatabaseEnabledCatalystApplication::Schema
+        traits QueryLog::AdoptPlack
+        <connect_info>
+            dsn   dbi:Pg:dbname=mypgdb
+            user   postgres
+            password ""
+        </connect_info>
+    </Model::Schema>
+
+Again, a trait is just a L<Moose::Role> that gets applied at setup time, via
+configuration, which will make it easy to have your debugging trait in development
+but not in production.  Please review the documentation for L<Catalyst::Plugin::ConfigLoader>
+if you need a refresher on how to use a configuration file and have different
+configurations for different purposes.
+
+So that is it!  Now, when L<Catalyst> runs a request, any L<DBIx::Class> events
+will be logged via the L<DBIx::Class::QueryLog> which you have enabled via the
+L<Plack> middleware you added above.
+
+=head2 Plack::Middleware::Debug::DBIC::QueryLog
+
+You are now logging queries, but you have no reporting tools or way to see the
+results of that logging.  Luckily, L<Plack::Middleware::Debug> offers us a
+standard approach for adding debuggin panels to your web application.  Building
+on top of this system is straightforward.  Here's how to take that querylog and
+have it displayed as a nicely formated debugging panel:
+
+    use Plack::Builder;
+    use Plack::Middleware::Debug;
+    use MyDatabaseEnabledCatalystApplication;
+
+    my $app = MyDatabaseEnabledCatalystApplication->psgi_app;
+    my $panels = Plack::Middleware::Debug->default_panels;
+
+    builder {
+      enable 'DBIC::QueryLog';
+      enable 'Debug', panels =>['DBIC::QueryLog', @$panels];
+      $app;
+    };
+
+This creates a L<Plack::Middleware::Debug> console that addes your querylog
+report to the default list of panels.  If you run your application you should
+get a debug console similar to this one:
+
+=begin xhtml
+
+<img src="/calendar/static/images/2011/querylog.png" alt="DBIC::QueryLog - Querylog Report" />
+
+=end xhtml
+
+=head2 Control and Tweaks
+
+Since the debug panel is a very common use case, it will automatically wrap
+the underlying L<Plack::Middleware::DBIC::QueryLog> for you, which allows you
+to simplify your code a bit:
+
+    builder {
+      enable 'Debug', panels =>['DBIC::QueryLog', @$panels];
+      $app;
+    };
+
+Generally I only manually add L<Plack::Middleware::DBIC::QueryLog>  when I have
+some sort of logging that lives outside the debugging panels.  Additionally,
+you might want to only add the debug panels when you are in debugging mode, and
+you might wish to pass some arguments to the underlying L<DBIx::Class::QueryLog>
+Here's a complete example:
+
+    use Plack::Builder;
+    use Plack::Middleware::Debug;
+    use MyDatabaseEnabledCatalystApplication;
+
+    my $app = MyDatabaseEnabledCatalystApplication->psgi_app;
+    my $panels = Plack::Middleware::Debug->default_panels;
+
+    builder {
+      enable_if {
+        $ENV{CATALYST_DEBUG}
+      } 'Debug',  panels =>[['DBIC::QueryLog', passthrough=>1], @$panels];
+      $app;
+    };
+
+=head1 For More Information
+
+The source code for the three CPAN distributions discussed contain detailed
+examples and test cases, which are a great next step learning tool.  I highly
+recommend reviewing them.
+
+=head1 Summary
+
+Having L<Plack> as a core technology in L<Catalyst> broadens the available
+software ecosystem you can access in order to do you  job faster and better.
+However this is a two way street, so next time you are thinking of writing some
+L<Catalyst> specific code, such as a plugin or a trait for some existing tool,
+you should consider how that functionality could be brought down to the L<Plack>
+level.  The code written to expose L<DBIx::Class::QueryLog> via L<Plack>
+middleware can serve as a decent example of how to do this.
+
+=head1 Author
+
+John Napiorkowski <jjnapiork@cpan.org> or jnap on IRC.
+
+Thanks to Shutterstock (http://www.shutterstock.com/jobs.mhtml) for giving me
+a bit of time to review and craft this advent article.
+
+=cut

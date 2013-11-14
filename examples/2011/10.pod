@@ -1,0 +1,689 @@
+=head1 The ControllerRole ChainAction Massacre (Part 1)
+
+=head2 Overview
+
+This article describes one way to create reusable code
+by writing L<roles|https://metacpan.org/module/Moose::Role> for 
+L<Catalyst Controllers|https://metacpan.org/module/Catalyst::Controller> with a massive use of 
+L<Chained Actions|https://metacpan.org/module/Catalyst::DispatchType::Chained>.
+
+=head3 About this Article
+
+The article will start with an introduction on how to implement 
+chained actions in Moose::Roles. The second part will deal with 
+increasing reusability of your ControllerRoles by following some simple
+rules.
+
+=head3 About the title
+
+Did you see the movie "The Texas Chain Saw Massacre"? 
+I did. Did you like it? Well, I didn't. But I loved the title.
+Thats all!
+ 
+=head2 Chaining actions in Moose::Role
+
+=head3 Motivation
+
+Most Catalyst applications consist of several actions, distributed among 
+several controllers. Most of these actions 
+share some (more or less) identical code, for example if
+they work with data provided by a model. 
+Connecting to a database, fetching the required data and storing it in a local
+variable is not complicated, but it has to be done at the beginning of each
+action.
+I noticed that the first lines of code are almost identical for most of my actions:
+
+	sub foo :Local :Args(1){
+		my ($self, $c, $id) = @_;
+		my $model = $c->model('FooDB');
+		my $table = $model->resultset('footable');
+		my $item = $table->find($id);
+
+		$item->do_foo;
+
+		...
+
+Or, if I include some error handling:
+
+	sub foo :Local :Args(1){
+		my ($self, $c, $id) = @_;
+		my $model = $c->model('FooDB');
+		unless($model){ 
+			# handle fatal error
+		}
+		my $table = $model->resultset('footable');
+		unless($table){ 
+			# handle another fatal error
+		}
+
+		my $item = $table->find($id);
+		unless($item){ 
+			# not fatal -> notify user
+		}
+		
+		$item->do_foo;
+
+		...
+
+Even the error handling code is more or less identical in most actions.
+I don't want to rewrite (or copy-paste) the same code again and again. 
+Thats one reason why I love Catalyst.
+
+=head3 Chain me if you can!
+
+One possible solution to this problem is "chaining actions". This is neither new
+nor surprising, since the Catalyst Tutorial directly 
+L<points to it|https://metacpan.org/module/Catalyst::Manual::Tutorial::04_BasicCRUD#CONVERT-TO-A-CHAINED-ACTION>
+
+=head4 Converting a regular action into a chained one can be done in two steps:
+
+=over
+
+=item 1. moving the shared code to an extra action
+
+	sub get_item :Chained('/') :CaptureArgs(1){
+		my ($self, $c, @id) = @_;
+		my $model = $c->model('FooDB');
+		unless($model){ 
+			# handle fatal error
+		}
+		my $table = $model->resultset('footable');
+		unless($table){ 
+			# handle another fatal error
+		}
+
+		my $item = $table->find(@id);
+		unless($item){ 
+			# not fatal -> notify user
+		}
+
+		$c->stash(
+			model => $model,
+			table => $table,
+			item => $item,
+		);	
+
+=item 2. chaining your actions to the shared action
+
+	sub foo :Chained('get_item') :Args(0){
+		my ($self, $c) = @_;
+		$c->stash->{item}->do_foo;
+
+		...
+	}
+
+	sub bar :Chained('get_item') :Args(0){
+		my ($self, $c) = @_;
+		$c->stash->{item}->do_bar;
+
+		...
+	}
+
+=back
+
+=head4 Points of interest
+
+=over
+
+=item * The dispatcher distinguishes between "Args" and "CaptureArgs". 
+CaptureArgs are "eaten" by their method. This means they are removed from the
+argument list and are not visible to any action chained to the capturing one.
+"Args" should only be configured for a last action in a chain.
+
+=item * Since the id is now a CaptureArg for the "get_item" action, its 
+position in the path changes. Because the get_item action also has a PathPart,
+the path of "foo" changes from
+
+	"/foo/$id"
+
+to
+
+	"/get_item/$id/foo"
+
+=item * Empty PathParts are allowed. By setting an empty PathPart for
+the "get_item" action 
+
+	sub get_item :Chained('/') :PathPart("") :CaptureArgs(1){
+		...
+
+The resulting path will change from
+
+	"/get_item/$id/foo"
+
+to
+
+	"/$id/foo"
+
+which is more beautiful in my opinion. Take care that the paths stay unique!
+
+=item * L<uri_for_action|https://metacpan.org/module/Catalyst#c-uri_for_action-path-captures_and_args-args-query_values-> knows how to handle CaptureArgs. See the Catalyst documentation for details.
+
+=back
+
+=head3 Role Baby Role!
+
+At this point, we know that Catalyst makes it easy to reuse code by creating chained actions. But we still have to make our code available in our controller.
+
+Using L<roles|https://metacpan.org/module/Moose::Role> makes reusing your code easy. Roles allow you to specify subroutines and attributes. They will be 
+present in any class which has the role applied to it. Since Catalyst Controllers are Moose objects, applying a role to it is as easy as 
+adding 
+ 
+ with "RoleName";
+
+to your class.  
+The CPAN module L<MooseX::MethodAttributes::Role> makes it possible to add method attributes to subroutines.
+This allows you to implement complete Catalyst actions, including "Path", "Args", "Chains" and whatever you need.
+
+To make the "get_item" action more reusable, move it to a role as shown in the following example:
+
+	package CatalystX::TraitFor::Controller::MyGetItem;
+
+	use MooseX::MethodAttributes::Role;
+
+	sub get_item :Chained('/') :CaptureArgs(1){
+		my ($self, $c, @id) = @_;
+		my $model = $c->model('FooDB');
+		unless($model){ 
+			# handle fatal error
+		}
+		my $table = $model->resultset('footable');
+		unless($table){ 
+			# handle another fatal error
+		}
+
+		my $item = $table->find(@id);
+		unless($item){ 
+			# not fatal -> notify user
+		}
+
+		$c->stash(
+			model => $model,
+			table => $table,
+			item => $item,
+		);	
+	use namespace::autoclean;
+	1;
+
+If you feel like using the actions "foo" and "bar" in several controllers, you can move their code to roles aswell.
+You can ensure that the actions you are chaining to are present in your controller by using Moose's L<require|https://metacpan.org/module/Moose::Role#EXPORTED-FUNCTIONS>
+keyword. Keep in mind that this ensures that the required subroutine is present, but it does not require it to be a Catalyst action.
+The resulting roles for "foo" and "bar" will look like this:
+
+For Foo:
+
+	package CatalystX::TraitFor::Controller::MyFoo;
+
+	use MooseX::MethodAttributes::Role;
+
+	requires qw/get_item/;
+
+	sub foo :Chained('get_item') :Args(0){
+		my ($self, $c) = @_;
+		$c->stash->{item}->do_foo;
+
+		...
+	}
+
+	use namespace::autoclean;
+	1;
+
+and for Bar:
+
+	package CatalystX::TraitFor::Controller::MyBar;
+
+	use MooseX::MethodAttributes::Role;
+
+	requires qw/get_item/;
+
+	sub bar :Chained('get_item') :Args(0){
+		my ($self, $c) = @_;
+		$c->stash->{item}->do_bar;
+
+		...
+	}
+
+	use namespace::autoclean;
+	1;
+
+Now it is possible to "plug" your actions to any controller by applying the corresponding roles to them.
+You should consider changing some PathParts in your controllers, otherwise the actions will have the same
+path in all controllers:
+
+	package MyController;
+
+	use Moose;
+	extends "Catalyst::Controller";
+	with qw/
+		CatalystX::TraitFor::Controller::MyGetItem 
+		CatalystX::TraitFor::Controller::MyFoo
+	/;
+
+	__PACKAGE__->config(
+		action => {
+			get_item => {PathPart => 'mycontroller'},
+		},
+	);
+
+	__PACKAGE__->meta->make_immutable;
+	no Moose;
+	1;
+
+Or, if you want to provide your own "foo" method:
+
+	package AnotherController;
+
+	use Moose;
+	extends "Catalyst::Controller";
+	with qw/
+		CatalystX::TraitFor::Controller::MyGetItem 
+	/;
+
+	sub foo :Chained('get_item') :Args(0){
+		# your foo-code here
+	}
+
+	__PACKAGE__->config(
+		action => {
+			get_resultset => {PathPart => 'anothercontroller'},
+		},
+	);
+
+	__PACKAGE__->meta->make_immutable;
+	no Moose;
+	1;
+
+It is possible to modify the chains for each controller. If you want to do something before "get_item":
+
+	package ConfiguredController;
+
+	use Moose;
+	extends "Catalyst::Controller";
+	with qw/
+		CatalystX::TraitFor::Controller::MyGetItem 
+		CatalystX::TraitFor::Controller::MyFoo
+	/;
+	
+	sub prepare :Chained('/') :PathPart("") :CaptureArgs(0){
+		# your code here
+	}
+
+	__PACKAGE__->config(
+		action => {
+			get_item => {Chained => 'prepare', PathPart => 'something'},
+		},
+	);
+
+
+	__PACKAGE__->meta->make_immutable;
+	no Moose;
+	1;
+
+And if your table has more than one primary key:
+
+	package TwoPkController;
+
+	use Moose;
+	extends "Catalyst::Controller";
+	with qw/
+		CatalystX::TraitFor::Controller::MyGetItem 
+		CatalystX::TraitFor::Controller::MyFoo
+	/;
+	
+	__PACKAGE__->config(
+		action => {
+			get_item => {CaptureArgs => 2, PathPart => 'something'},
+		},
+	);
+
+	__PACKAGE__->meta->make_immutable;
+	no Moose;
+	1;
+
+
+By creating chained actions and putting them into ControllerRoles, it is possible to
+create some kind of "application bricks" which can easily be added to any controller.
+If you have implemented some functionality once, and you need it somewhere else,
+you can enable it by adding a single line of code to your controller. 
+
+Creating applications that way reminds me of playing with Lego. The only difference is that
+I can create my own Lego-bricks, and modify existing bricks if they do not exactly fit my needs.
+A childhood dream comes true. It's kind of cool, isn't it?
+
+=head2 Increasing reusability
+
+Code-reusability in the first chapter is very limited. This chapter will tell you why, and shows some simple tricks how to make your code more reusable:
+
+=head3 Oh my tiny little actions!
+
+One problem in the previous example is that the "get_item" action does more than getting one item. It can only be used by actions which 
+require exactly one item in the stash. By splitting "get_item" into three atomic parts, the code gets even more reusable:
+
+	package CatalystX::TraitFor::Controller::MyGetItem;
+
+	use MooseX::MethodAttributes::Role;
+
+	sub get_model :Chained('/') :CaptureArgs(0){
+		my ($self, $c) = @_;
+		my $model = $c->model('FooDB');
+		unless($model){ 
+			# handle fatal error
+		}
+
+		$c->stash(
+			model => $model,
+		);
+	}
+
+	sub get_resultset :Chained('get_model') :CaptureArgs(0){
+		my ($self, $c) = @_;
+		my $table = $c->stash->{model}->resultset('footable');
+		unless($table){ 
+			# handle another fatal error
+		}
+
+		$c->stash(
+			table => $table,
+		);	
+	}
+
+	sub get_item :Chained('get_resultset') :CaptureArgs(1){
+		my ($self, $c, $id) = @_;
+		my $item = $c->stash{table}->find($id);
+		unless($item){ 
+			# not fatal -> notify user
+		}
+
+		$c->stash(
+			item => $item,
+		);	
+	}
+
+	use namespace::autoclean;
+	1;
+
+If you realize that some controllers never need one item, but often need the model and resultset, you can distribute this actions
+among two or three roles (named "MyGetModel", "MyGetRS" and "MyGetItem"). Remember to require the actions you are chaining to!
+
+Distributing the code among several roles makes your code more flexible. If one of your controllers should get the model in
+a different way, but needs the same resultset and item code, you can consume the "MyGetRS" and "MyGetItem" roles and implement 
+the "get_model" action in your controller. If you often need all actions in the same controller, and you don't want to write 3 three
+"with"-lines, you can create a role which includes all three actions:
+
+The "reunion-role":
+
+	package CatalystX::TraitFor::Controller::ModelActions;
+
+	use Moose::Role;
+	with qw/
+		CatalystX::TraitFor::Controller::MyGetModel
+		CatalystX::TraitFor::Controller::MyGetRS
+		CatalystX::TraitFor::Controller::MyGetItem
+	/;
+
+	no Moose::Role;
+	1;
+
+A controller which uses all three action would look like this:
+
+	package MyCompleteController;
+
+	use Moose;
+	extends "Catalyst::Controller";
+	with "CatalystX::TraitFor::Controller::ModelActions";
+
+	__PACKAGE__->meta->make_immutable;
+
+	no Moose;
+	1;
+
+A controller with a custom "get_model" action would look like this:
+
+	package MyPartlyController;
+
+	use Moose;
+	extends "Catalyst::Controller";
+	with qw/
+		CatalystX::TraitFor::Controller::MyGetRS
+		CatalystX::TraitFor::Controller::MyGetItem
+	/;
+
+	sub get_model :Chained("/") :CaptureArgs(0) :PathPart(""){ ... }
+
+	__PACKAGE__->meta->make_immutable;
+
+	no Moose;
+	1;
+
+=head3 Don't force me! Don't force yourself! Don't force anybody!
+
+The second problem in my example is that several things which should be flexible 
+are hardcoded in my roles. The most important examples are the name of the model and the
+name of the table. This means that we can easily add these actions to any controller, but all
+controllers would do EXACTLY the same thing, which is not what we want. Even if you plan to 
+use your role exactly once in each application, you force your application to use the same 
+model name and table name as your role.
+
+Using attributes to store these information makes your roles configurable and much more
+reusable:
+
+	package CatalystX::TraitFor::Controller::MyGetModel;
+
+	use MooseX::MethodAttributes::Role;
+
+	has "model_name" => (
+		is => 'rw',
+		isa => 'Str',
+		default => sub{
+			"DB",
+		},
+	);
+
+	sub get_model :Chained('/') :CaptureArgs(0){
+		my ($self, $c) = @_;
+		my $model = $c->model($self->model_name);
+		unless($model){ 
+			# handle fatal error
+		}
+
+		$c->stash(
+			model => $model,
+		);	
+	}
+
+	use namespace::autoclean;
+	1;
+
+With this modification, you can configure the model name for each controller:
+
+	package MyDifferentController;
+
+	use Moose;
+	extends "Catalyst::Controller";
+	with "CatalystX::TraitFor::Controller::ModelActions";
+
+	...
+	
+	__PACKAGE__->config(
+		model_name => "AnotherDB",
+	);
+
+	__PACKAGE__->meta->make_immutable;
+
+	no Moose;
+	1;
+
+=head3 Whats your name?
+
+The next problem is related to the previous one. The stash-keys of model, resultset and item are hardcoded aswell.
+This may result in conflicting names, overwritten values in the stash and a lot of trouble. Avoid this by making the 
+stash-keys configurable aswell. The default values can even be created dynamically:
+
+	package CatalystX::TraitFor::Controller::MyGetModel;
+
+	use MooseX::MethodAttributes::Role;
+
+	has "stash_model_as" => (
+		is => 'rw',
+		isa => 'Str',
+		default => sub{
+			my @split = split "::", ref(shift);
+			my $controllername = pop @split;
+			$controllername =~ tr/[A-Z]/[a-z]/;
+			return $controllername . "_model";
+		},
+	);
+
+	has model_name => ( ... );
+
+	sub get_model :Chained('/') :CaptureArgs(0){
+		my ($self, $c) = @_;
+		my $model = $c->model($self->model_name);
+		unless($model){ 
+			# handle fatal error
+		}
+
+		my $model_as = $self->stash_model_as;
+		$c->stash(
+			$model_as => $model,
+		);	
+	}
+
+	use namespace::autoclean;
+	1;
+
+You will have to modify your "get_resultset" action aswell:
+
+	package CatalystX::TraitFor::Controller::MyGetResultSet;
+
+	use MooseX::MethodAttributes::Role;
+
+	has 'table_name' => ( ... );
+
+	has 'stash_table_as' => ( ... );
+
+	sub get_resultset :Chained('get_model') :CaptureArgs(0){
+		my ($self, $c) = @_;
+		my $table = $c->stash->{$self->stash_model_as}->resultset($self->table_name);
+
+		...
+	}
+
+	use namespace::autoclean;
+	1;
+
+In this example, the default stash keys are created dynamically from the controllers name.
+If you apply the roles to a controller named "MyApp::Controller::Foo", the model will be 
+stashed as "foo_model". If you don't like this behaviour, you can override the default in
+the __PACKAGE__->config(...);
+
+
+=head3 Sorry, babe! I don't remember you...
+
+Now we know how to write reusable, modular and configurable code with chained actions and Moose::Role.
+My last tip is not new. In fact, its kind of old-fashioned:: Choose "good" names for your roles, and PLEASE write a POD for your modules! 
+If you use ControllerRoles as intensive as I do, most of your controllers will only consist of the package name, a few
+"Moose" lines, the list of consumed roles and some configuration.
+If you choose "good" names for your roles, the controllers code will be more or less self-explanatory.
+If you don't choose your names wisely, it will be hard to understand what the consuming controller
+does.
+
+Here is an Example: Try to guess the purpose of the following controllers:
+
+=over
+
+=item 1.
+
+	package MyApp::Controller:Foo;
+
+	use Moose;
+	extends "Catalyst::Controller";
+	with "CatalystX::TraitFor::Controller::MyRole";
+
+	__PACKAGE__->meta->make_immutable;
+	no Moose;
+	1;
+
+No chance!
+
+=item 2.
+
+	package MyApp::Controller:Bar;
+
+	use Moose;
+	extends "Catalyst::Controller";
+	with "CatalystX::TraitFor::Controller::ChainedCRUD";
+
+	__PACKAGE__->meta->make_immutable;
+	no Moose;
+	1;
+
+Hard to guess. Is this a CRUD controller? It might use chained actions...
+
+=back
+
+When you write the documentation for your roles, remember to include all attributes and actions.
+You should include some extra information about your chained actions:
+
+=over
+
+=item * how many arguments does this action expect by default, and which
+
+=item * what items does this action expect to be in the stash
+
+=item * which items in the stash are modified
+
+=item * which items are added to the stash
+
+=item * which keys are used for each of the items, and where do the keys come from
+
+=back
+
+When you add all these information, everybody (including yourself) will be able to 
+understand the purpose of your roles, and how to use them. Well, not everybody will 
+be able to understand your code. Maybe not even you. But the chance that yourself and others
+understand and use your code increases.
+
+=head2 Conclusion
+
+=over
+
+=item * Chaining actions can make your code more reusable
+
+=item * Making your actions as atomic as possible increases flexibility and reusability
+
+=item * It is possible to write reuseable, chained actions in Moose::Role's
+
+=item * Making your roles as configurable as possible dramatically increases the chance that you (and others) find it usefull in other projects
+
+=item * Moose helps you making your modules configurabel in an easy and flexible way
+
+=item * Roles can easily be applied to controllers. This makes it possible to create small
+"Controller-Bricks" which can be plugged to almost every controller.
+
+=item * Clever naming and documentation is mandatory
+
+=item * The author does not like violent movies, but he sometimes likes violent titles
+
+=back
+
+=head2 Whats next?
+
+The "ControllerRole ChainAction Massacre Part 2" will deal with
+
+=over
+
+=item * how to use BUILD and BUILDARGS methods in ControllerRoles
+
+=item * some more examples
+
+=item * some restrictions related to Moose::Role
+
+=item * how to bypass some of these restrictions
+
+=item * performance issues
+
+=back
+
+=head2 Author:
+
+Lukas Thiemeier <lukast@cpan.org>
