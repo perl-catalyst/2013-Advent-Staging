@@ -89,15 +89,213 @@ there's something to say for having a straightup solution when writing trival
 test cases, or for when you want to demo some code.  So, let's write a plugin
 for L<Catalyst> that does this!
 
+=head1 The Plugin
 
-=head2 What other things could you do with this?
+Lets take this line by line.  Lets assume you've create a proper directory
+structure for a Perl distribution (look for links to Github near the end of the
+post for examples) for a new L<Catalyst> plugin called 
+'Catalyst::Plugin::RunTestRequest'.  Here's the start of the file that would go
+in 'lib/Catalyst/Plugin/RunTestRequest.pm'.
+
+    package Catalyst::Plugin::RunTestRequest;
+     
+    use Moose::Role;
+
+    requires 'psgi_app';
+
+In the post L<Moose> port of L<Catalyst> world, its best to write a new plugin
+as a L<Moose::Role>.  We specify this role can only be composed into a class
+that has the C<psgi_app> method, which we'll see in moment is needed by the
+new method we are adding to your application class.
+
+Next, let's write the method that will be composed into your application
+subclass:
+
+    sub run_test_request {
+      my ($self, @req) = @_;
+      my $http_request = $_test_request_spec_to_http_request->(@req); 
+
+      require HTTP::Message::PSGI;
+      my $psgi_env = HTTP::Message::PSGI::req_to_psgi($http_request);
+      my $psgi_response = $self->psgi_app->($psgi_env);
+      my $http_response = HTTP::Message::PSGI::res_from_psgi($psgi_response);
+
+      return $http_response;
+    }
+
+The first two lines creates the method and slurps up incoming args.  We will
+normalize C<@req> via an anonymous subroutine so that we are always dealing
+with an instance of L<HTTP::Request> (and I've simply cribbed a similiarly
+named method from L<Web::Simple::Application, so I won't go into it, just give
+a big shout out to the L<Web::Simple> cabal).  I'll link to the full file at
+the end of the article.
+
+Followed by the required module L<HTTP::Message::PSGI> which lets us convert 
+between the various types of requests and responses we'll need to deal with.
+We C<require> this module rather than declare it as a C<use> near the top of
+the file so that we can avoid loading it in the cases when this method is
+never called (thereby saving a bit of memory) and it we also don't call the
+modules C<import> method, so we avoid importing unneeded functions into our
+namespace.
+
+Next we take the normalized L<HTTP::Request> and convert it into a HashRef
+that conforms to the L<PSGI> specification.  We pass this to the C<psgi_app>
+method, which is returning a L<PSGI> application, basically a coderef that
+wants that $psgi_env we just made.  This is the coderef that kicks off the
+full L<Catalyst> request / response cycle.  It returns a $psgi_response,
+which we then convert to a L<HTTP::Response>.  Which gets returned to the
+caller.
+
+The full plugin looks like this (and again see links to Github near the end).
+
+    package Catalyst::Plugin::RunTestRequest;
+     
+    use Moose::Role;
+
+    requires 'psgi_app';
+
+    our $VERSION = '0.001';
+
+    ## Block of code gratuitously stolen from Web::Simple::Application
+    my $_test_request_spec_to_http_request = sub {
+      my ($method, $path, @rest) = @_;
+     
+      # if it's a reference, assume a request object
+      return $method if ref($method);
+     
+      if ($path =~ s/^(.*?)\@//) {
+        my $basic = $1;
+        require MIME::Base64;
+        unshift @rest, 'Authorization:', 'Basic '.MIME::Base64::encode($basic);
+      }
+
+      require HTTP::Request;
+     
+      my $request = HTTP::Request->new($method => $path);
+     
+      my @params;
+     
+      while (my ($header, $value) = splice(@rest, 0, 2)) {
+        unless ($header =~ s/:$//) {
+          push @params, $header, $value;
+        }
+        $header =~ s/_/-/g;
+        if ($header eq 'Content') {
+          $request->content($value);
+        } else {
+          $request->headers->push_header($header, $value);
+        }
+      }
+     
+      if (($method eq 'POST' or $method eq 'PUT') and @params) {
+        my $content = do {
+          require URI;
+          my $url = URI->new('http:');
+          $url->query_form(@params);
+          $url->query;
+        };
+        $request->header('Content-Type' => 'application/x-www-form-urlencoded');
+        $request->header('Content-Length' => length($content));
+        $request->content($content);
+      }
+     
+      return $request;
+    };
+
+    sub run_test_request {
+      my ($self, @req) = @_;
+      my $http_request = $_test_request_spec_to_http_request->(@req); 
+
+      require HTTP::Message::PSGI;
+      my $psgi_env = HTTP::Message::PSGI::req_to_psgi($http_request);
+      my $psgi_response = $self->psgi_app->($psgi_env);
+      my $http_response = HTTP::Message::PSGI::res_from_psgi($psgi_response);
+
+      return $http_response;
+    }
+
+    1;
+
+There's not a lot to it, most if it is the normalization code, that lets you
+have a bit of flexibility using the method.  Lets build a quick application.
+
+Here's the application class:
+
+  package MyCatApp;
+
+  use Catalyst 'RunTestRequest';
+
+  __PACKAGE__->setup;
+
+L<Catalyst> seems to get a bad rap as needing a lot of boilerplate, but really
+that's all you need for this simple application.  Lets make a controller:
+
+    package MyCatApp::Controller::Root;
+
+    use base 'Catalyst::Controller';
+
+    sub root : Path('/helloworld') {
+      pop->res->body('Hello world!');
+    }
+
+    sub test_post : POST Path('/echo') {
+      my ($self, $c) = @_;
+      $c->res->body( $c->req->body_parameters->{val} );
+    }
+
+    1;
+
+Again, there's not a lot of work here.  Its realy not many more lines than the
+L<Web::Simple> version, but its spread across more files.  That would make more
+sense down the road when you application has 20 controllers and nearly 100
+URL endpoints, but for a simple, demo app like this its still not too bad :)
+
+To be fair, L<Web::Simple> is nice that it has built in support for matching
+on a POST parameter and gives you a default 'not found page', so we'd need
+a little more code to be completely comparable, but this is good enough for a
+demo.
+
+Lets look at the test case.  It looks nearly the same as the L<Web::Simple>
+one:
+
+    use HTTP::Request::Common;
+    use Test::Most;
+    use MyCatApp;
+
+    {
+      ok my $http_response = MyCatApp->run_test_request(GET '/helloworld');
+      is $http_response->content, 'Hello world!';
+    }
+
+    {
+      ok my $http_response = MyCatApp->run_test_request(POST '/echo', [val=>'posted']);
+      is $http_response->content, 'posted';
+    }
+
+    {
+      ok my $http_response = MyCatApp->run_test_request('GET' => '/helloworld');
+      is $http_response->content, 'Hello world!';
+    }
+
+    {
+      ok my $http_response = MyCatApp->run_test_request('POST' => '/echo', {val=>'posted'});
+      is $http_response->content, 'posted';
+    }
+
+    done_testing;
+
+And that's really it!
+
+=head1 What other things could you do with this?
 
 I've never loved the way L<Catalyst::Plugin::SubRequest> worked.  It would be
 very easy to rewrite or offer another approach using this.  
 
 =head1 Summary
 
-TBD
+We reviewed when one might wish to write a L<Catalyst> plugin, what such a
+plugin looks like.  We also took a look at how the L<PSGI> underpinnings of
+L<Catalyst> provide a useful gateway to provide novel features.
 
 =head1 For More Information
 

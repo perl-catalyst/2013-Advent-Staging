@@ -2,6 +2,8 @@ package Catalyst::Plugin::RunTestRequest;
  
 use Moose::Role;
 
+requires 'psgi_app';
+
 our $VERSION = '0.001';
 
 ## Block of code gratuitously stolen from Web::Simple::Application
@@ -16,6 +18,8 @@ my $_test_request_spec_to_http_request = sub {
     require MIME::Base64;
     unshift @rest, 'Authorization:', 'Basic '.MIME::Base64::encode($basic);
   }
+
+  require HTTP::Request;
  
   my $request = HTTP::Request->new($method => $path);
  
@@ -50,15 +54,14 @@ my $_test_request_spec_to_http_request = sub {
 
 sub run_test_request {
   my ($self, @req) = @_;
- 
-  require HTTP::Request;
+  my $http_request = $_test_request_spec_to_http_request->(@req); 
+
   require HTTP::Message::PSGI;
- 
-  my $http_request = $_test_request_spec_to_http_request->(@req);
   my $psgi_env = HTTP::Message::PSGI::req_to_psgi($http_request);
   my $psgi_response = $self->psgi_app->($psgi_env);
+  my $http_response = HTTP::Message::PSGI::res_from_psgi($psgi_response);
 
-  return HTTP::Message::PSGI::res_from_psgi($psgi_response);
+  return $http_response;
 }
 
 =head1 TITLE
