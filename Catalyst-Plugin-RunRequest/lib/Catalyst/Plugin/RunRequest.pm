@@ -4,6 +4,7 @@ use Moose::Role;
 
 our $VERSION = '0.001';
 
+## Block of code gratuitously stolen from Web::Simple::Application
 my $_test_request_spec_to_http_request = sub {
   my ($method, $path, @rest) = @_;
  
@@ -83,7 +84,7 @@ customized C<psgi> file.
 
 =head1 METHODS
 
-This plugin defines the following methods
+This plugin defines the following methods.
 
 =head2 run_request
 
