@@ -1,12 +1,12 @@
 # TITLE
 
-Catalyst::Plugin::RunRequest - Run a request on your Catalyst Application
+Catalyst::Plugin::RunTestRequest - Run a request on your Catalyst Application
 
 # SYNOPSIS
 
     use MyApp;
 
-    my $http_response = MyApp->run_request(GET => '/');
+    my $http_response = MyApp->run_test_request(GET => '/');
 
 # DESCRIPTION
 
@@ -22,11 +22,11 @@ This plugin defines the following methods.
 
 ## run\_request
 
-     my $res = MyApp->run_request(GET => '/' => %headers);
+     my $res = MyApp->run_test_request(GET => '/' => %headers);
     
-     my $res = MyApp->run_request(POST => '/' => %headers_or_form);
+     my $res = MyApp->run_test_request(POST => '/' => %headers_or_form);
     
-     my $res = MyApp->run_request($http_request);
+     my $res = MyApp->run_test_request($http_request);
     
 
 Accepts either an [HTTP::Request](https://metacpan.org/pod/HTTP::Request) object or ($method, $path) and runs that
@@ -43,7 +43,7 @@ If you prefix the URL with 'user:pass@' this will be converted into
 an Authorization header for HTTP basic auth:
  
 
-     my $res = $app->run_request(
+     my $res = $app->run_test_request(
                  GET => 'bob:secret@/protected/resource'
                );
     
@@ -52,7 +52,7 @@ If pairs are passed where the key ends in :, it is instead treated as a
 headers, so:
  
 
-     my $res = $app->run_request(
+     my $res = $app->run_test_request(
                  POST => '/',
                 'Accept:' => 'text/html',
                  some_form_key => 'value'
@@ -63,7 +63,7 @@ will do what you expect. You can also pass a special key of Content: to
 set the request body:
  
 
-    my $res = $app->run_request(
+    my $res = $app->run_test_request(
                 POST => '/',
                 'Content-Type:' => 'text/json',
                 'Content:' => '{ "json": "here" }',

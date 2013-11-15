@@ -31,6 +31,65 @@ trickier based on the way L<Catalyst> does setup) but as it turn out, mimicing
 the underlying function is very easy to do.  It would make a rational plugin and
 its also a good opportunity to review some of Catalyst's PSGI guts.
 
+Here's how it works in L<Web::Simple>.  You write a basic web application 
+like so:
+
+    package MyWSApp;
+
+    use Web::Simple;
+
+    sub dispatch_request {
+      sub (GET + /helloworld) {
+        [ 200, [ 'Content-type', 'text/plain' ], [ 'Hello world!' ] ]
+      },
+      sub (POST + /echo + %:val=) {
+        [ 200, [ 'Content-type', 'text/plain' ], [ $_{val} ] ]
+      },
+    }
+
+    __PACKAGE__->run_if_script;
+
+Now, in a test case you could write:
+
+    use Test::Most;
+    use MyWSApp;
+
+    {
+      ok my $http_response = MyWSApp->run_test_request(GET '/helloworld');
+      is $http_response->content, 'Hello world!';
+    }
+
+    {
+      ok my $http_response = MyWSApp->run_test_request(POST '/echo', [val=>'posted']);
+      is $http_response->content, 'posted';
+    }
+
+    {
+      ok my $http_response = MyWSApp->run_test_request('GET' => '/helloworld');
+      is $http_response->content, 'Hello world!';
+    }
+
+    {
+      ok my $http_response = MyWSApp->run_test_request('POST' => '/echo', {val=>'posted'});
+      is $http_response->content, 'posted';
+    }
+
+    done_testing;
+
+In L<Web::Simple> the C<run_test_request> method accepts either a L<HTTP::Request>
+object (built by hand or via L<HTTP::Request::Common> which is my personal
+favored approach) or it can take a data structure so you don't need to load any
+additional modules (if you look carefully at the given example, its very similar
+to the L<HTTP::Request::Common> style code).  The idea here is to take any sort
+of L<HTTP::Request> and get the L<HTTP::Response> out of it.
+
+So that's nice, concise and simple.  Sure, L<Catalyst::Runtime> ships with
+L<Catalyst::Test> and there's even more powerful testing options on CPAN, but
+there's something to say for having a straightup solution when writing trival
+test cases, or for when you want to demo some code.  So, let's write a plugin
+for L<Catalyst> that does this!
+
+
 =head2 What other things could you do with this?
 
 I've never loved the way L<Catalyst::Plugin::SubRequest> worked.  It would be

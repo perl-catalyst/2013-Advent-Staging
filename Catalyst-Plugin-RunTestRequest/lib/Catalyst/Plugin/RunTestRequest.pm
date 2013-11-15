@@ -1,7 +1,6 @@
-package Catalyst::Plugin::RunRequest;
+package Catalyst::Plugin::RunTestRequest;
  
 use Moose::Role;
-use Module::Runtime ();
 
 our $VERSION = '0.001';
 
@@ -49,7 +48,7 @@ my $_test_request_spec_to_http_request = sub {
   return $request;
 };
 
-sub run_request {
+sub run_test_request {
   my ($self, @req) = @_;
  
   require HTTP::Request;
@@ -62,18 +61,18 @@ sub run_request {
   return HTTP::Message::PSGI::res_from_psgi($psgi_response);
 }
 
-sub GET  { shift->run_request('GET',  @_) }
-sub POST { shift->run_request('POST', @_) }
+sub GET  { shift->run_test_request('GET',  @_) }
+sub POST { shift->run_test_request('POST', @_) }
 
 =head1 TITLE
 
-Catalyst::Plugin::RunRequest - Run a request on your Catalyst Application
+Catalyst::Plugin::RunTestRequest - Run a request on your Catalyst Application
 
 =head1 SYNOPSIS
 
     use MyApp;
 
-    my $http_response = MyApp->run_request(GET => '/');
+    my $http_response = MyApp->run_test_request(GET => '/');
 
 =head1 DESCRIPTION
 
@@ -87,13 +86,13 @@ customized C<psgi> file.
 
 This plugin defines the following methods.
 
-=head2 run_request
+=head2 run_test_request
 
-  my $res = MyApp->run_request(GET => '/' => %headers);
+  my $res = MyApp->run_test_request(GET => '/' => %headers);
  
-  my $res = MyApp->run_request(POST => '/' => %headers_or_form);
+  my $res = MyApp->run_test_request(POST => '/' => %headers_or_form);
  
-  my $res = MyApp->run_request($http_request);
+  my $res = MyApp->run_test_request($http_request);
  
 Accepts either an L<HTTP::Request> object or ($method, $path) and runs that
 request against the application, returning an L<HTTP::Response> object.
@@ -106,14 +105,14 @@ provided by L<HTTP::Request::Common>.
 If you prefix the URL with 'user:pass@' this will be converted into
 an Authorization header for HTTP basic auth:
  
-  my $res = $app->run_request(
+  my $res = $app->run_test_request(
               GET => 'bob:secret@/protected/resource'
             );
  
 If pairs are passed where the key ends in :, it is instead treated as a
 headers, so:
  
-  my $res = $app->run_request(
+  my $res = $app->run_test_request(
               POST => '/',
              'Accept:' => 'text/html',
               some_form_key => 'value'
@@ -122,7 +121,7 @@ headers, so:
 will do what you expect. You can also pass a special key of Content: to
 set the request body:
  
-  my $res = $app->run_request(
+  my $res = $app->run_test_request(
               POST => '/',
               'Content-Type:' => 'text/json',
               'Content:' => '{ "json": "here" }',
@@ -134,8 +133,8 @@ set the request body:
 
 These are shortcuts for:
 
-    $app->run_request(GET => ... );
-    $app->run_request(POST => ... );
+    $app->run_test_request(GET => ... );
+    $app->run_test_request(POST => ... );
 
 The save a bit of typing at the expense of poluting your application class
 namespace.  Buyer Beware!
