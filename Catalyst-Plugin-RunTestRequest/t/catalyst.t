@@ -23,14 +23,4 @@ use MyCatApp;
   is $http_response->content, 'posted';
 }
 
-{
-  ok my $http_response = MyCatApp->GET('/helloworld');
-  is $http_response->content, 'Hello world!';
-}
-
-{
-  ok my $http_response = MyCatApp->POST('/echo', {val=>'posted'});
-  is $http_response->content, 'posted';
-}
-
 done_testing;

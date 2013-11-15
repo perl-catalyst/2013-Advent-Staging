@@ -61,9 +61,6 @@ sub run_test_request {
   return HTTP::Message::PSGI::res_from_psgi($psgi_response);
 }
 
-sub GET  { shift->run_test_request('GET',  @_) }
-sub POST { shift->run_test_request('POST', @_) }
-
 =head1 TITLE
 
 Catalyst::Plugin::RunTestRequest - Run a request on your Catalyst Application
@@ -126,18 +123,6 @@ set the request body:
               'Content-Type:' => 'text/json',
               'Content:' => '{ "json": "here" }',
             );
-
-=head2 GET
-
-=head2 POST
-
-These are shortcuts for:
-
-    $app->run_test_request(GET => ... );
-    $app->run_test_request(POST => ... );
-
-The save a bit of typing at the expense of poluting your application class
-namespace.  Buyer Beware!
 
 =head1 SEE ALSO
 
