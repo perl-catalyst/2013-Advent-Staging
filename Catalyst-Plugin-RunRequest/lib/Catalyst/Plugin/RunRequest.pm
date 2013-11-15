@@ -128,6 +128,18 @@ set the request body:
               'Content:' => '{ "json": "here" }',
             );
 
+=head2 GET
+
+=head2 POST
+
+These are shortcuts for:
+
+    $app->run_request(GET => ... );
+    $app->run_request(POST => ... );
+
+The save a bit of typing at the expense of poluting your application class
+namespace.  Buyer Beware!
+
 =head1 SEE ALSO
 
 L<Catalyst>
