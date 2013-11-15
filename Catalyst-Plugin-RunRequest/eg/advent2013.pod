@@ -25,7 +25,11 @@ framework, L<Web::Simple>
 
 =head1 Web::Simple::Application->run_test_request
 
-L<Web::Simple> has a neat
+L<Web::Simple> has a neat feature that makes it easy to run sample request
+in a test case or via the command line.  We'll leave the CLI for now (its a bit
+trickier based on the way L<Catalyst> does setup) but as it turn out, mimicing
+the underlying function is very easy to do.  It would make a rational plugin and
+its also a good opportunity to review some of Catalyst's PSGI guts.
 
 =head2 What other things could you do with this?
 
