@@ -2,7 +2,7 @@ package MyCatApp::Controller::Root;
 
 use base 'Catalyst::Controller';
 
-sub root : Path('/helloworld') {
+sub root : GET Path('/helloworld') {
   pop->res->body('Hello world!');
 }
 

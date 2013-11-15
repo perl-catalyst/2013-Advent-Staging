@@ -27,7 +27,7 @@ framework, L<Web::Simple>
 
 L<Web::Simple> has a neat feature that makes it easy to run sample request
 in a test case or via the command line.  We'll leave the CLI for now (its a bit
-trickier based on the way L<Catalyst> does setup) but as it turn out, mimicing
+trickier based on the way L<Catalyst> does setup) but as it turns out, mimicing
 the underlying function is very easy to do.  It would make a rational plugin and
 its also a good opportunity to review some of Catalyst's PSGI guts.
 
@@ -126,7 +126,7 @@ subclass:
 The first two lines creates the method and slurps up incoming args.  We will
 normalize C<@req> via an anonymous subroutine so that we are always dealing
 with an instance of L<HTTP::Request> (and I've simply cribbed a similiarly
-named method from L<Web::Simple::Application, so I won't go into it, just give
+named method from L<Web::Simple::Application>, so I won't go into it, just give
 a big shout out to the L<Web::Simple> cabal).  I'll link to the full file at
 the end of the article.
 
@@ -234,7 +234,7 @@ that's all you need for this simple application.  Lets make a controller:
 
     use base 'Catalyst::Controller';
 
-    sub root : Path('/helloworld') {
+    sub root : GET Path('/helloworld') {
       pop->res->body('Hello world!');
     }
 
@@ -284,7 +284,11 @@ one:
 
     done_testing;
 
-And that's really it!
+And that's really it!  Here's the full application with test cases and
+organized as a proper CPAN style distribution:
+
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Catalyst-Plugin-RunTestRequest>
+
 
 =head1 What other things could you do with this?
 
