@@ -1,0 +1,90 @@
+# TITLE
+
+Catalyst::Plugin::RunRequest - Run a request on your Catalyst Application
+
+# SYNOPSIS
+
+    use MyApp;
+
+    my $http_response = MyApp->run_request(GET => '/');
+
+# DESCRIPTION
+
+A simple plugin that allows you to call your application against a single
+request.  Useful for testing.
+
+This is good unless you are invoking your [Catalyst](https://metacpan.org/pod/Catalyst) application via a
+customized `psgi` file.
+
+# METHODS
+
+This plugin defines the following methods.
+
+## run\_request
+
+     my $res = MyApp->run_request(GET => '/' => %headers);
+    
+     my $res = MyApp->run_request(POST => '/' => %headers_or_form);
+    
+     my $res = MyApp->run_request($http_request);
+    
+
+Accepts either an [HTTP::Request](https://metacpan.org/pod/HTTP::Request) object or ($method, $path) and runs that
+request against the application, returning an [HTTP::Response](https://metacpan.org/pod/HTTP::Response) object.
+ 
+
+If the HTTP method is POST or PUT, then a series of pairs can be passed after
+this to create a form style message body. If you need to test an upload, then
+create an [HTTP::Request](https://metacpan.org/pod/HTTP::Request) object by hand or use the `POST` subroutine
+provided by [HTTP::Request::Common](https://metacpan.org/pod/HTTP::Request::Common).
+ 
+
+If you prefix the URL with 'user:pass@' this will be converted into
+an Authorization header for HTTP basic auth:
+ 
+
+     my $res = $app->run_request(
+                 GET => 'bob:secret@/protected/resource'
+               );
+    
+
+If pairs are passed where the key ends in :, it is instead treated as a
+headers, so:
+ 
+
+     my $res = $app->run_request(
+                 POST => '/',
+                'Accept:' => 'text/html',
+                 some_form_key => 'value'
+               );
+    
+
+will do what you expect. You can also pass a special key of Content: to
+set the request body:
+ 
+
+    my $res = $app->run_request(
+                POST => '/',
+                'Content-Type:' => 'text/json',
+                'Content:' => '{ "json": "here" }',
+              );
+
+# SEE ALSO
+
+[Catalyst](https://metacpan.org/pod/Catalyst)
+
+# AUTHOR
+
+John Napiorkowski [email:jjnapiork@cpan.org](email:jjnapiork@cpan.org)
+
+# SPECIAL THANKS
+
+Thank to mst for the code example in [Web::Simple](https://metacpan.org/pod/Web::Simple), which I basically cribbed
+(as well as the docs..).
+
+# COPYRIGHT & LICENSE
+
+Copyright 2013, John Napiorkowski [email:jjnapiork@cpan.org](email:jjnapiork@cpan.org)
+
+This library is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.

@@ -1,6 +1,7 @@
 package Catalyst::Plugin::RunRequest;
  
 use Moose::Role;
+use Module::Runtime ();
 
 our $VERSION = '0.001';
 
