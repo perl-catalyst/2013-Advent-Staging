@@ -20,7 +20,7 @@ customized `psgi` file.
 
 This plugin defines the following methods.
 
-## run\_request
+## run\_test\_request
 
      my $res = MyApp->run_test_request(GET => '/' => %headers);
     
