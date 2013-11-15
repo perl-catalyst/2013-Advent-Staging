@@ -1,5 +1,6 @@
-use Test::Most;
 use HTTP::Request::Common;
+use Test::Most;
+use Test::Lib;
 use MyApp;
 
 {
