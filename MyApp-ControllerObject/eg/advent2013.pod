@@ -61,7 +61,12 @@ And doing this allows you to write a controller like this:
 
     package MyApp::Controller::Root;
 
-    use MyApp::ControllerObject;
+    use Moose;
+    BEGIN { extends 'Catalyst::Controller' }
+
+    use Function::Parameters;
+    use CatalystX::Syntax::Action;
+    use namespace::autoclean;
 
     has 'test_attribute' => (
       is=>'ro',
@@ -80,6 +85,37 @@ And doing this allows you to write a controller like this:
     1;
 
 =head1 Moose and Import::Into to the Rescue!
+
+Our goal is to take the controller example from above and reduce it so that
+you can just do:
+
+    package MyApp::Controller;
+
+    use MyApp::ControllerObject;
+
+    ## -- You custom actions and methods
+
+    __PACKAGE__->meta->make_immutable;
+
+This yields an example controller like so:
+
+    package MyApp::Controller::Root;
+
+    use MyApp::ControllerObject;
+
+    has 'test_attribute' => (
+      is=>'ro',
+      default=>'example value');
+
+    method generate_helloworld { 'Hello world!' }
+
+    action helloworld : GET Path('/helloworld') {
+      $ctx->res->body( $self->generate_helloworld);
+    }
+
+    action echo($arg) : GET Path('/echo') Args(1) {
+      $ctx->res->body( $arg );
+    }
 
 L<Catalyst> is build on L<Moose> so out of the box you get some built in
 features that allow you to create a custom Controller object class that slurps
