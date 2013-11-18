@@ -1,0 +1,111 @@
+=head1 Title
+
+An Example Catalyst Plugin - Catalyst::Plugin::RunRequest
+
+=head1 Overview
+
+Learn how to create a custom Catalyst base controller with Mooselike
+imported keywords and more.
+
+=head1 Introduction
+
+Most L<Catalyst> applications of a certain age and complexity have a lot of
+controllers.  Quite often your controllers have excessive boilerplate code
+even before you add anything related to your business logic.  Here's the
+canonical controller as often documented.
+
+    package MyApp::Controller::MyController;
+
+    use Moose;
+    use namespace::autoclean;
+ 
+    BEGIN { extends 'Catalyst::Controller' }
+
+    ## -- Your code
+
+    __PACKAGE__->meta->make_immutable
+
+I've always disliked how the C<extends> needs to be in a BEGIN block, which is
+a side effect of how L<MooseX::MethodAttributes> works with the existing code
+base as ported to L<Moose> several years ago.   It just looks odd and is a
+surprise to people new (and even old) to the framework.  People generally just
+cargo cult it.
+
+Additionally every action typically starts by shifting or slurping the same
+arguments:
+
+    sub my_action :Action {
+      my ($self, $c) = @_'
+    }
+
+And that's before you add in any of a number of things special to your logic.
+Is there anything we can do to centralize some of this boilerplate?  And what
+if you like to use a handful of other syntax enhancing modules like L<Method::Signatures::Simple>,
+L<CatalystX::Syntax::Action>?  Or perhaps there's some additional actionroles
+you'd liked applied?  For example I like to use L<Catalyst::ActionRole::QueryParameter>
+so that I can match actions on GET style query parameters, similar to other
+frameworks like L<Web::Simple>.  If you wanted that, you'd end up with a
+controller something like:
+
+    package MyApp::Controller;
+
+    use Moose;
+    BEGIN { extends 'Catalyst::Controller' }
+
+    use Method::Signatures::Simple;
+    use CatalystX::Syntax::Action;
+    use namespace::autoclean;
+
+    __PACKAGE__->config(
+      action_roles => ['QueryParameter']);
+
+    ## -- You custom actions and methods
+
+    __PACKAGE__->meta->make_immutable;
+
+
+=head1 Moose to the Rescue!
+
+L<Catalyst> is build on L<Moose> so out of the box you get some built in
+features that allow you to create a custom Controller object class that slurps
+up everything you get with L<Moose> and allows you to add in whatever it is you
+like.  Ultimately what we want is to create a C<MyApp::ControllerObject> that
+you can use like L<Moose> to inport some shared behavior as well as set a base
+base class.  Our goal is to take the controller example from above and reduce
+it so that you can just do:
+
+    package MyApp::Controller;
+
+    use MyApp::ControllerObject;
+
+    __PACKAGE__->meta->make_immutable;
+   
+=head1 Summary
+
+We reviewed one approach to using built in features of L<Moose>, the object
+system upon which L<Catalyst> is built, to reduce boilerplate when several
+desired features are needed across a large project.
+
+=head1 Limitations and Concerns
+
+Although this method does allow one to centralize some boilerplate, I highly
+recommend being careful with the amount of extra behavior you place in this
+common class, as excessive magic can ultimately cause confusion and make it
+harder to debug issue.  This method is not intended as a replacement for
+proper use of standard Perl design (Roles, etc).
+
+=head1 More Information
+
+I recommend reading the excellent documentation for extending L<Moose> via
+its build in exporter, L<Moose::Exporter> as well as any of the related
+documentation in the L<Moose> distribution, as well as the following:
+
+L<Catalyst>, L<Moose>, L<Method::Signatures>,
+L<namespace::autoclean>, L<CatalystX::Syntax::Action>
+
+=head1 Author
+
+John Napiorkowski L<email:jjnapiork@cpan.org>
+
+=cut
+
