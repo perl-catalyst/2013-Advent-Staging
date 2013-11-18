@@ -21,11 +21,11 @@ request or response is probably better off written as L<Plack::Middleware>.
 However, if you are looking for something that is global, and is related to
 application functionality, a plugin is still a rational option.  Here's an
 example plugin I did that mimics some functionality from another Perl web
-framework, L<Web::Simple>
+framework, L<Web::Simple>.
 
 =head1 Web::Simple::Application->run_test_request
 
-L<Web::Simple> has a neat feature that makes it easy to run sample request
+L<Web::Simple> has a neat feature that makes it easy to run a sample request
 in a test case or via the command line.  We'll leave the CLI for now (its a bit
 trickier based on the way L<Catalyst> does setup) but as it turns out, mimicing
 the underlying function is very easy to do.  It would make a rational plugin and
@@ -216,16 +216,16 @@ The full plugin looks like this (and again see links to Github near the end).
 
     1;
 
-There's not a lot to it, most if it is the normalization code, that lets you
+There's not a lot to it, most if it is the normalization code that lets you
 have a bit of flexibility using the method.  Lets build a quick application.
 
 Here's the application class:
 
-  package MyCatApp;
+    package MyCatApp;
 
-  use Catalyst 'RunTestRequest';
+    use Catalyst 'RunTestRequest';
 
-  __PACKAGE__->setup;
+    __PACKAGE__->setup;
 
 L<Catalyst> seems to get a bad rap as needing a lot of boilerplate, but really
 that's all you need for this simple application.  Lets make a controller:
@@ -289,11 +289,28 @@ organized as a proper CPAN style distribution:
 
 L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Catalyst-Plugin-RunTestRequest>
 
+=head1 Limitations
+
+Since we run the L<HTTP::Request> (or request specification) directly against
+the C<psgi_app> method of L<Catalyst> if you are using a standalone C<psgi>
+file that declares additional middleware or URL mountpoints, those additional
+bits will not be tested.  If you are using middleware are a critical part of
+your L<Catalyst> application, I recommend using the the new middleware
+configuration option: L<Catalyst\PSGI-MIDDLEWARE>.  For mounting PSGI
+applications you may prefer to consider L<Catalyst::Response\from_psgi_response>
+or look at the following independent distributions of you are on an older
+version of L<Catalyst>.
+
+L<Catalyst::Plugin::EnableMiddleware>, L<Catalyst::Action::FromPSGI>.
 
 =head1 What other things could you do with this?
 
 I've never loved the way L<Catalyst::Plugin::SubRequest> worked.  It would be
-very easy to rewrite or offer another approach using this.  
+very easy to rewrite or offer another approach using this.
+
+It might be nice to have a sort of commandline REPL that let you run test
+requests against your L<Catalyst> application, with a full request/response
+trace.
 
 =head1 Summary
 
