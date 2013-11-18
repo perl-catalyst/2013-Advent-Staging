@@ -17,10 +17,8 @@ sub init_meta {
 }
 
 sub import {
-  foreach my $importable (shift->importables) {
-      use_module($importable)->import::into(scalar caller);
-  }
-
+  use_module($_)->import::into(scalar caller)
+    for shift->importables;
   goto $import;
 }
 
