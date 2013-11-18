@@ -1,4 +1,4 @@
-# Perl Catalyst Advent Calendar - 2012
+# Perl Catalyst Advent Calendar - 2013
 
 It's time again for this year's [Catalyst Advent Calendar](http://www.catalystframework.org/calendar/2013/)! 
 
