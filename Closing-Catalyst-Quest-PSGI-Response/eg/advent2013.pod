@@ -160,17 +160,163 @@ well do a walkthrough:
         }
     }
 
+The example usage is as follows:
+
+    package MyApp::Web::Controller::Test;
+     
+    use base 'Catalyst::Controller';
+    use Plack::App::Directory;
+     
+    my $app = Plack::App::Directory
+      ->new({ root => "/path/to/htdocs" })
+        ->to_app;
+     
+    sub myaction :Local {
+      my ($self, $c) = @_;
+      $c->response->from_psgi_response(
+        $app->($c->request->env));
+    }
+
+So basically given a L<PSGI> response, as you would get from running it against
+the current $env (part of the L<PSGI> specification), let that response be
+the response that L<Catalyst> returns.  We could use a bit of sugar here to
+make it easier to mount the L<PSGI> application under the current action
+namespace (for example) but this really is the minimal viable useful feature
+upon which all that coould later be built, should we find it useful to do so.
+
+Alll things being equal, I'd prefer to see this method refactored a bit, rather
+than one big method with so many conditionals.  However I was concerned about 
+adding to the L<Catalyst::Response> namespace, particularly since the request
+object is something L<Catalyst> explicitly makes public and replacable.  We have
+no idea whats going on in the darkpan, so its best to err on the side of making
+the smallest footprint in the code that we can.
+
 =head1 Code Walkthrough
+
+Starting from the top:
+
+    sub from_psgi_response {
+        my ($self, $psgi_res) = @_;
+
+Declare the new method and slurp up the expected arguments.  In this case we
+expect just a single argument which is the L<PSGI> compliant response.  This
+is sure to be a reference of some type, but we'll need to inspect it a bit
+to figure out the correct handling:
+
+        if(ref $psgi_res eq 'ARRAY') {
+            my ($status, $headers, $body) = @$psgi_res;
+            $self->status($status);
+            $self->headers(HTTP::Headers->new(@$headers));
+
+So if you recall from the test case, we know that the L<PSGI> response is going
+to be an ArrayRef or a CodeRef.  Let's handle the easy case first, since if the
+response is an ArrayRef that means its all complete and we can just map it to
+the L<Catalyst::Response> directly.  As you can see mapping the C<status> and
+C<headers> is straightforward. Let's see the code to map the C<body>:
+
+            if(ref $body eq 'ARRAY') {
+              $self->body(join '', grep defined, @$body);
+            } else {
+              $self->body($body);
+            }
+
+This is a bit more tricky since the C<body> can be a filehandle like object
+or an ArrayRef.  L<Catalyst> allows for string bodies or filehandles, which
+means in the case of it being an ArrayRef we need to flatten it to a string.
+
+I seriously considered changing L<Catalyst> to allow for a ArrayRef body,
+but in the end I felt it was too much risk for what seemed like small reward
+at this time.  Perhaps in a future release?
+
+So, what about the second case, when the L<PSGI> response is a coderef?
+
+        } elsif(ref $psgi_res eq 'CODE') {
+
+The specification says when the response is a coderef (this is considered a
+delayed response) the server should obtain the actual response by calling that
+coderef with coderef of its own.  In this case since L<Catalyst> is hosting the
+L<PSGI> application, we can consider it the server for now. Lets build the
+coderef we want to pass to the delayed response (if you look at L<PSGI> and
+related L<Plack> examples, this second coderef is often call the responder,
+and conventionally called $responder or $respond in code examples).
+
+          $psgi_res->(sub {
+                my $response = shift;
+                my ($status, $headers, $maybe_body) = @$response;
+                $self->status($status);
+                $self->headers(HTTP::Headers->new(@$headers));
+
+The L<PSGI> application that is returning a delayed response has two options
+but the both start the same way.  It must call the $responder coderef with
+at least the first two parts of the classic L<PSGI> tuple, the C<status> and
+C<headers>.  It then may or may not return the C<body> arrayref or filehandle
+at this point.  If you refer back to the test case we wrote for L<Catalyst>
+you can see what such an application would look like:
+
+    my $psgi_app = sub {
+      my $responder = shift;
+      return $responder->([200, ['Content-Type'=>'text/plain'],
+        [qw/hello world today2/]]);
+    };
+
+In this example the L<PSGI> application is returning the full tuple.  This
+is the case we handle first:
+
+                if($maybe_body) {
+                    if(ref $maybe_body eq 'ARRAY') {
+                      $self->body(join '', grep defined, @$maybe_body);
+                    } else {
+                      $self->body($maybe_body);
+                    }
+                }
+
+Here we find that the C<body> is ready to go, so we do the "is it an arrayref
+or a filehandle" dance again and then we are done.
+
+However there's yet one final option.  The L<PSGI> application may choose to
+not return the C<body> immediately.  You would do this in cases where the
+body response is streamed, or if you are running the application in an event
+loop and the body is being created in response to events (such as the result
+of a database query).  In this case, the $responder coderef is expected to
+return a L<PSGI> writer object, which does at least two methods, C<write> and
+C<close>.  This way your application can continue to stream output via the
+C<write> method and when its done you call C<close>.
+
+Its actually a bit more complicated, since ideally you'd also monitor for the
+case where you lose the connection between the client and server, but for ease
+of illustration, lets assume the streaming response is just like in the test
+case above:
+
+        my $psgi_app =  sub {
+          my $responder = shift;
+          my $writer = $responder->([200, ['Content-Type'=>'text/plain']]);
+          $writer->write('hello');
+          $writer->write('world');
+          $writer->write('today3');
+          $writer->close;
+        };
+
+This is a very trivial case, but it shows the basics of the interface.  How do
+we handle this?
+
+                else {
+                    return $self->write_fh;
+                }
+
+The C<write_fh> accessor of L<Catalyst::Response> gives you the raw writer
+object which has been passed down to L<Catalyst> from the server under which
+it runs.  All such objects must do the C<write> and C<close> methods but the
+actual clase of the object will be specific to the server you are running 
+L<Catalyst> on.  The C<writer> object gets returned up to the delayed L<PSGI>
+application via the C<responder> for that case when the application does not
+provide the full C<body>.
+
+And that's the walkthrough!
 
 =head1 Prior Art
 
 Much of the inspiration and incentive to do this work came from
 L<Catalyst::Action::FromPSGI>
-
-=head1 For More Information
-
-Questhub: 
-Code:
 
 =head1 Summary
 
@@ -181,6 +327,6 @@ easier time should you try yourself.
 
 =head1 Author
 
-Your Name <your@email.com> IRC nick
+John Napiorkowski L<email:jjnapiork@cpan.org>
 
 =cut
