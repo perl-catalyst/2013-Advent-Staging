@@ -1,0 +1,186 @@
+=head1 Title
+
+How To Hack On Catalyst Core - Adding $response->from_psgi_response
+
+=head1 Overview
+
+A lot of people want to contribute to the L<Catalyst> project, but get scared
+off due to an assumption that the code is highly complex and requires an
+experts touch.  This article will review how we added the feature that allows
+a L<Catalyst::Response> to be filled from the response of a PSGI appliction.
+
+See L<Catalyst::Response\from_psgi_response> for more.
+
+=head1 Introduction
+
+L<Catalyst> has been L<PSGI> native for a while, but to date has not really
+taken much advantage of that fact beyond the ability to use L<Plack> based
+web servers in replacement of the L<Catalyst::Engine> namespace.  This is not a
+small think to be sure, but it would be great if L<Catalyst> could not flex its
+L<PSGI> abilities even more.  One thing that would be possible is for L<Catalyst>
+to allow one to populate a reponse via a L<Plack::App> such as L<Plack::App::File>
+(which would make a possible replacement for L<Catalyst::Plugin::Static::Simple>).
+Or you could use L<Catalyst> to mount other frameworks, such as L<Web::Machine>
+which excel in a particular domain such as building RESTful APIs.
+
+So, how can one do this?  Let's look into it!
+
+=head1 Prequisite Tasks
+
+Two features added to L<Catalyst> in previous releases where necessary to
+perform this task properly.  The first was to allow one to have more control
+over how we write output to the server and out to the requesting client.  This
+was the feature to expose the writer filehandle, and it was primarily added
+to make it easier to write asynchronous and/or streaming output, although as
+we will see, that feature enabled us to do stuff we'd not thought of at that
+point.
+
+See L<Catalyst::Response\res-write_fh> for more on using $Response->write_fh.
+
+This was needed as we will see later to make sure we could properly deal with
+a streaming or delayed PSGI response.  Without it we'd be forced to fully buffer
+the response, which would be a shame since L<Catalyst> can support these types
+of responses.
+
+For more information see L<PSGI\Delayed-Response-and-Streaming-Body>.
+
+The second feature was added as a development version of this summer past, and
+it supports adding an input buffer object should one not exist in the case 
+where the underlying L<Plack> engine does not provide one.  This is needed because
+L<Catalyst> slurps up any POST or PUT content that might be part of the request
+and that means that any PSGI application that gets called later on won't get
+that (in other words it won't have access to POSTed form parameters or file
+uploads).  Some PSGI webservers like L<Starman> provide a readable, buffered
+filehandle of this request content, others (like ModPerl and FastCGI) do not.
+This leads to issues where some code works fine in development (when you are
+using L<Starman>) but then break in a FastCGI (or *shudder* mod_perl) setup.
+So now in newer versions of L<Catalyst> when it is slurping up the request
+content, if we notice there is no input buffer, we create one so that anyone
+that needs it down the line will get access to it.
+
+Between these two features we have everything in L<Catalyst> we need to complete
+this task.
+
+=head1 The Test Cases
+
+Prior to working on this task, I wrote out the minimal test cases in the form
+of a new controller test.  Here's a version of those test cases:
+
+    package TestFromPSGI::Controller::Root;
+
+    use base 'Catalyst::Controller';
+
+    sub from_psgi_array : Local {
+      my ($self, $c) = @_;
+      my $res = sub {
+        my ($env) = @_;
+        return [200, ['Content-Type'=>'text/plain'],
+          [qw/hello world today/]];
+      }->($c->req->env);
+
+      $c->res->from_psgi_response($res);
+    }
+
+    sub from_psgi_code : Local {
+      my ($self, $c) = @_;
+
+      my $res = sub {
+        my ($env) = @_;
+        return sub {
+          my $responder = shift;
+          return $responder->([200, ['Content-Type'=>'text/plain'],
+            [qw/hello world today2/]]);
+        };
+      }->($c->req->env);
+
+      $c->res->from_psgi_response($res);
+    }
+
+    sub from_psgi_code_itr : Local {
+      my ($self, $c) = @_;
+      my $res = sub {
+        my ($env) = @_;
+        return sub {
+          my $responder = shift;
+          my $writer = $responder->([200, ['Content-Type'=>'text/plain']]);
+          $writer->write('hello');
+          $writer->write('world');
+          $writer->write('today3');
+          $writer->close;
+        };
+      }->($c->req->env);
+
+      $c->res->from_psgi_response($res);
+    }
+
+So if you go and read the L<PSGI> documentation, you know there's three types
+of responses we need to deal with.  The first is the classic PSGI example
+of a tuple (ArrayRef of Status, Headers and BodyArray/Body Filehandle).  The
+second and third are variations of delayed response.  These types of responses
+return a coderef instead of a tuple and can including streaming types of
+responses (see the third action C<from_psgi_code_itr> for example of this).
+
+Ok, so we created what are now failing test cases.  Lets write the method to
+make them pass!
+
+=head1 The Code
+
+Let's take a look at the full method added to L<Catalyst::Response> and then
+well do a walkthrough:
+
+    sub from_psgi_response {
+        my ($self, $psgi_res) = @_;
+        if(ref $psgi_res eq 'ARRAY') {
+            my ($status, $headers, $body) = @$psgi_res;
+            $self->status($status);
+            $self->headers(HTTP::Headers->new(@$headers));
+            if(ref $body eq 'ARRAY') {
+              $self->body(join '', grep defined, @$body);
+            } else {
+              $self->body($body);
+            }
+        } elsif(ref $psgi_res eq 'CODE') {
+            $psgi_res->(sub {
+                my $response = shift;
+                my ($status, $headers, $maybe_body) = @$response;
+                $self->status($status);
+                $self->headers(HTTP::Headers->new(@$headers));
+                if($maybe_body) {
+                    if(ref $maybe_body eq 'ARRAY') {
+                      $self->body(join '', grep defined, @$maybe_body);
+                    } else {
+                      $self->body($maybe_body);
+                    }
+                } else {
+                    return $self->write_fh;
+                }
+            });  
+         } else {
+            die "You can't set a Catalyst response from that, expect a valid PSGI response";
+        }
+    }
+
+=head1 Code Walkthrough
+
+=head1 Prior Art
+
+Much of the inspiration and incentive to do this work came from
+L<Catalyst::Action::FromPSGI>
+
+=head1 For More Information
+
+Questhub: 
+Code:
+
+=head1 Summary
+
+Diving into Catalyst codebase can be a bit daunting, due to its age and how its
+changed over the years.  By detailing the steps involved in extending L<Catalyst>
+its our hope you will have a better understanding of the process and have an
+easier time should you try yourself.
+
+=head1 Author
+
+Your Name <your@email.com> IRC nick
+
+=cut
