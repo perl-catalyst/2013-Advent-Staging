@@ -9,7 +9,7 @@ off due to an assumption that the code is highly complex and requires an
 experts touch.  This article will review how we added the feature that allows
 a L<Catalyst::Response> to be filled from the response of a PSGI appliction.
 
-See L<Catalyst::Response\from_psgi_response> for more.
+See L<Catalyst::Response/from_psgi_response> for more.
 
 =head1 Introduction
 
@@ -35,14 +35,14 @@ to make it easier to write asynchronous and/or streaming output, although as
 we will see, that feature enabled us to do stuff we'd not thought of at that
 point.
 
-See L<Catalyst::Response\res-write_fh> for more on using $Response->write_fh.
+See L<Catalyst::Response/res-write_fh> for more on using $Response->write_fh.
 
 This was needed as we will see later to make sure we could properly deal with
 a streaming or delayed PSGI response.  Without it we'd be forced to fully buffer
 the response, which would be a shame since L<Catalyst> can support these types
 of responses.
 
-For more information see L<PSGI\Delayed-Response-and-Streaming-Body>.
+For more information see L<PSGI/Delayed-Response-and-Streaming-Body>.
 
 The second feature was added as a development version of this summer past, and
 it supports adding an input buffer object should one not exist in the case 
