@@ -1,0 +1,170 @@
+=head1 Title
+
+Matching Actions on Request Content Types
+
+=head1 Overview
+
+A quick example of how to use the Request Content Type matching feature
+in L<Catalyst> version 5.90050+.
+
+=head1 Introduction
+
+Beginning in the v5.90050 release of L<Catalyst> we introduced into core the
+ability to match your controller actions to the content types of incoming
+HTTP requests.  This allows you to match actions to the contents of the
+HTTP request content type header.  As a result, you can dispatch to your
+actions based on if the incoming request is a JSON post, a classic form
+data post, or some other type.
+
+=head1 Why dispatch on Request Content Type?
+
+Modern web developers consider RESTful principles when crafting web APIs
+and in creating meaninful URL structures for thier websites.  One core principle
+of REST is that a given resource (in this case a URL) can have many
+representations (HTML, XML, JSON, etc.)  In the past, many people used a
+L<Catalyst> addin, L<Catalyst::Action::REST>, which provided a toolkit to
+deserialize many different content types and provide them to an action.  This
+works well and we still recommend L<Catalyst::Action::REST> for this and for
+many of its other features.  However there are cases when you want to process
+things differently depending on the request content type.  In addition, there
+might be times when you don't need all the power and features of
+L<Catalyst::Action::REST> but still want to dispatch on incoming request types
+(for example you might have a website with a form and you'd like to support 
+both JSON and classic HTML POSTing).  In those cases the ability to dispatch to
+a given action based on matching a content type is useful.
+
+=head1 How Does it Work?
+
+Let's look at some example actions:
+
+    sub as_json : POST Path('/echo')
+      Consumes('application/json') { ... }
+
+    sub as_formdata : POST Path('/echo')
+      Consumes('application/x-www-form-urlencoded') { ... }
+
+In this example the same URL ('/echo') would be server by either JSON or by
+classic form data.  The L<Catalyst> dispatcher will choose the correct action
+based on the information tagged to the action by the subroutine attribute
+C<Consumes>.  The generic form of usages is "Consumes($type)" where $type is
+a standard content type.  Here's a few of the more common types you might
+encounter:
+
+=over 4
+
+=item application/json
+
+JSON encoded data "{'message' : 'hello'}"
+
+=item application/x-www-form-urlencoded
+
+HTML form post
+
+=item multipart/form-data
+
+Form posting with file uploads
+
+=back
+
+Since there's several content types that are in common usage, we provide
+shortcuts, which work in the form "Consumes($shortcut)" where $shortcut is:
+
+    JSON => 'application/json',
+    JS => 'application/javascript',
+    PERL => 'application/perl',
+    HTML => 'text/html',
+    XML => 'text/xml',
+    Plain => 'text/plain',
+    UrlEncoded => 'application/x-www-form-urlencoded',
+    Multipart => 'multipart/form-data',
+    HTMLForm => ['application/x-www-form-urlencoded','multipart/form-data'],
+
+And would look like:
+
+    sub as_json : POST Path('/echo')
+      Consumes(JSON) { ... }
+
+    sub as_formdata : POST Path('/echo')
+      Consumes(HTMLForm) { ... }
+
+As with other such subroutine attributes, you can match more than one on a
+given action (which does an OR style match).
+
+    sub is_more_than_one
+      : Chained('start')
+      : Consumes(UrlEncoded)
+      : Consumes(Multipart)
+
+See L<Catalyst::Controller/Consumes> and L<Catalyst::ActionRole::ConsumesContent>
+for more details and examples.
+
+=head1 A Full Example
+
+An example controller:
+
+    package MyApp::Controller::Root;
+
+    use base 'Catalyst::Controller';
+
+    sub as_json : POST Path('/echo') 
+     Consumes('application/json') {
+      my ($self, $c) = @_;
+      $c->response->body(
+        $c->request->body_data->{message});
+
+    }
+
+    sub formdata : POST Path('/echo')
+     Consumes('application/x-www-form-urlencoded') {
+      my ($self, $c) = @_;
+      $c->response->body(
+        $c->request->body_parameters->{message});
+    }
+
+You should note the use the new L<Catalyst::Request> method C<body_data>
+to parsing incoming JSON.  This was added in v5.90050 in the Fall of 2013.
+For more information on C<body_data> see L<Catalyst::Request/req-body_data>
+and L<Catalyst/DATA-HANDLERS>.
+
+The test case for this controller:
+
+    use Test::Most;
+    use Catalyst::Test 'MyApp';
+    use HTTP::Request::Common;
+    use JSON::MaybeXS;
+     
+    {
+      ok my $req = POST '/echo',
+         Content_Type => 'application/json',
+         Content => encode_json +{message=>'test'};
+     
+      ok my $res = request $req;
+
+      is $res->content, 'test', 'Handles JSON post';
+    }
+     
+    {
+      ok my $req = POST '/echo', [message=>'test'];
+      ok my $res = request $req;
+
+      is $res->content, 'test', 'Handles classic HTML post';
+    }
+
+    done_testing;
+
+You can see the full application source on Github:
+
+L<https://github.com/perl-catalyst/2013-Advent-Staging>.
+
+=head1 Summary
+
+Request content matching is a useful feature to have in Core L<Catalyst> which
+lets you make more meaningful URLs.  It also plays nice with existing addons
+such as L<Catalyst::Action::REST> when you are using L<Catalyst> to craft your
+web APIs.
+
+=head1 Author
+
+John Napiorkowski L<email:jjnapiork@cpan.org>
+
+=cut
