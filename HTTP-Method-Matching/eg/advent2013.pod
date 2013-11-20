@@ -1,0 +1,127 @@
+=head1 Title
+
+HTTP Method Matching in Catalyst
+
+=head1 Overview
+
+A quick example of how to use the HTTP Method matching feature
+in L<Catalyst> along with some tips and caveats.
+
+=head1 Introduction
+
+Beginning in the v5.90020 release of L<Catalyst> we introduced into core the
+ability to match your controller actions to incoming HTTP method verbs.  It
+does this by extending the standard L<Catalyst> approach of using subroutine
+attributes to tag your actions with 'metadata' that the dispatcher uses to
+figure out how to assign a given incoming request to a controller and action.
+Generic and shortcut attributes are allowed, and in addition we support some
+of the common approaches to use HTTP extended headers to 'tunnel' a method
+verb for the cases when the client is restricted (such as is common in many
+browsers to only support GET and POST).
+
+=head1 Why dispatch on HTTP Methods?
+
+Most modern web frameworks give you some high level ability to match an
+incoming request based on its HTTP verb.  programmers find it useful for
+a variety of tasks, from crafting RESTful APIs to allowing one to just have
+more meaningful URLs.  L<Catalyst> has allowed this via a few add on 
+distributions but often people don't find them.  Having this feature in core
+means one can perform those tasks 'out of the box'.
+
+=head1 How Does it Work?
+
+Let's look at an example action:
+
+    sub is_get : Method('GET') Path('/example') { ... }
+    sub is_any : Path('/example') { ... }
+
+In this case the URL '/example' would get executed by the C<is_get> method
+of this controller when the HTTP method is a GET and by the C<is_any> method
+for all other cases.  The generical uses is "Method($verb)" where $verb is
+any standard or custom value that shows up in the HTTP method header.  Since
+several are common, we provide some shortcuts:
+
+    sub is_get    : GET Path('/example') { ... }
+    sub is_post   : POST Path('/example') { ... }
+    sub is_put    : PUT Path('/example') { ... }
+    sub is_delete : DELETE Path('/example') { ... }
+
+In these cases the '/example' url would get mapped to the action as expected
+by the incoming HTTP method verb.  Finally, you may add more than one method
+matching attribute:
+
+    sub post_and_put : POST PUT Path('/example) { ... }
+
+=head1 HTTP Extended Header Tunneling
+
+Since not all clients support a rich HTTP method vocabulary (classic HTML
+forms come to mind, since they typically only support GET and POST) it has
+become standard practice to use HTTP extended headers to 'tunnel' a verb
+not supported by a given client over one that does.  For example, one might
+use this feature to tunnel a DELETE or PUT over a POST.
+
+For broad compatibility, we support HTTP method tunneling over the following
+HTTP headers:
+
+=over 4
+ 
+=item X-HTTP-Method (Microsoft)
+ 
+=item X-HTTP-Method-Override (Google/GData)
+ 
+=item X-METHOD-OVERRIDE (IBM)
+ 
+=item x-tunneled-method (used in many other similar systems on CPAN)
+
+=back
+
+Typically you won't need to set these headers yourself, they are usually
+created for you by the Javascript or similar toolkits but you should be aware
+of there function so you are not caught by surprise when they are active.
+
+=head1 A Full Example
+
+An example controller:
+
+    package MyApp::Controller::Root;
+
+    use base 'Catalyst::Controller';
+
+    sub is_get    : GET Path('/test') { pop->res->body('GET') }
+
+    sub is_post   : POST Path('/test') { pop->res->body('POST') }
+
+    sub is_put    : PUT Path('/test') { pop->res->body('PUT') }
+
+    sub is_delete : DELETE Path('/test') { pop->res->body('DELETE') }
+
+    1;
+ 
+And the test case for this:
+
+    use Test::Most;
+    use Catalyst::Test 'MyApp';
+    use HTTP::Request::Common qw(GET PUT POST DELETE);
+
+    is request(GET '/test')->content, 'GET';
+    is request(PUT '/test')->content, 'PUT';
+    is request(POST '/test')->content, 'POST';
+    is request(DELETE '/test')->content, 'DELETE';
+
+    done_testing;
+
+You can see the full application source on Github:
+L<>.
+
+=head1 Summary
+
+HTTP Method Matching in core L<Catalyst> gives you a bit more flexibility
+to craft how the dispatcher maps incoming requests to your actions.  Although
+the feature has limitations it should prove useful when mapping complex
+client server interactions.
+
+=head1 Author
+
+John Napiorkowski L<email:jjnapiork@cpan.org>
+
+=cut
