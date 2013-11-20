@@ -22,11 +22,13 @@ browsers to only support GET and POST).
 =head1 Why dispatch on HTTP Methods?
 
 Most modern web frameworks give you some high level ability to match an
-incoming request based on its HTTP verb.  programmers find it useful for
+incoming request based on its HTTP verb.  Programmers find it useful for
 a variety of tasks, from crafting RESTful APIs to allowing one to just have
 more meaningful URLs.  L<Catalyst> has allowed this via a few add on 
 distributions but often people don't find them.  Having this feature in core
-means one can perform those tasks 'out of the box'.
+means one can perform those tasks 'out of the box'.  It also means that we
+can count on the presence of that ability as we continue to craft L<Catalyst>
+core codebase into the future.
 
 =head1 How Does it Work?
 
@@ -111,7 +113,23 @@ And the test case for this:
     done_testing;
 
 You can see the full application source on Github:
-L<>.
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/HTTP-Method-Matching>.
+
+=head1 Caveats and Gotchas
+
+You should remember that Catalyst will typically match on the first action
+that meets the minimum requirement.  This means you need to put you more
+specific matches 'higher' in the controller than the catchall actions.  When
+running L<Catalyst> in debug mode (via CATALYST_DEBUG=1, for example) the
+initial informations screen now contains information about what HTTP methods a
+given action will try to match, so that should help you figure out if something
+is going wrong.
+
+Also, this feature does not attempt to set some standard HTTP header information
+in the response regarding which methods are and are not allowed (as does for
+example L<Web::Machine>.  If you are trying to create a strong, RESTful API
+you should not forget to set the response HTTP headers around allowed HTTP
+methods in your controller code.
 
 =head1 Summary
 
