@@ -4,7 +4,7 @@
 <head>
 <title></title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
-<link rev="made" href="mailto:root@maya.(none)" />
+<link rev="made" href="mailto:johnk@johnklxopr.(none)" />
 </head>
 
 <body style="background-color: white">
@@ -16,10 +16,12 @@
   <li><a href="#OVERVIEW">OVERVIEW</a></li>
   <li><a href="#INTRODUCTION">INTRODUCTION</a>
     <ul>
-      <li><a href="#Alternatives-To-SOLR">Alternatives To SOLR</a></li>
+      <li><a href="#Solr-Basics">Solr Basics</a></li>
+      <li><a href="#Alternatives-To-Solr">Alternatives To Solr</a></li>
       <li><a href="#Perl-Modules">Perl Modules</a></li>
     </ul>
   </li>
+  <li><a href="#Preparing-the-Environment">Preparing the Environment</a></li>
   <li><a href="#SECTIONS">$SECTIONS</a></li>
   <li><a href="#For-More-Information">For More Information</a></li>
   <li><a href="#Summary">Summary</a></li>
@@ -32,24 +34,30 @@
 
 <h1 id="OVERVIEW">OVERVIEW</h1>
 
-
-
-<p>Using <a href="http://lucene.apache.org/solr/">SOLR</a>, a Search Server from <a href="http://lucene.apache.org/">Apache's Lucene Project</a> as a <em>Catalyst Model</em>.</p>
+<p>Using <a href="http://lucene.apache.org/Solr/">Solr</a>, a Search Server from <a href="http://lucene.apache.org">Apache&#39;s Lucene Project</a> as a <b>Catalyst Model</b>.</p>
 
 <h1 id="INTRODUCTION">INTRODUCTION</h1>
 
-<p>Compared to conventional database search (and the full text query extensions found in most modern SQL implementations), a Search Server like SOLR is going to provide better performance and a more specific feature set. SOLR is a server built on top of Lucene, which is more of a raw toolkit for search components, both run as a java servlet.</p>
+<p>Compared to conventional database search (and the full text query extensions found in most modern SQL implementations), a Search Server is going to provide better performance and search features. Since Solr is writeable as well as readable it can be used as a NoSQL datastore, with all the caveats that accompany something which is certainly not ACID compliant.</p>
 
-<h2 id="Alternatives-To-SOLR">Alternatives To SOLR</h2>
+<h2 id="Solr-Basics">Solr Basics</h2>
+
+<p>Solr is a java servelet run from a .war file, implementing a web based interface to Lucene. Requests to Solr are made via http requests. Request data may be sent in either post or get values. Data is returned in json but Solr will also return data in xml or csv formats. Similarly posts of data to Solr may be in any of these formats. Lucene provides indexing and search technology, as well as spellchecking, hit highlighting and advanced analysis/tokenization capabilities.</p>
+
+<h2 id="Alternatives-To-Solr">Alternatives To Solr</h2>
 
 
 
-<p>The most obvious alternative to SOLR is direct implementation of Lucene. Since the purpose of SOLR is to provide a more useable interface to Lucene in the first place, this does not seem like a good way to get started. An Alternative to SOLR that is also built on Lucene is <a href="http://www.elasticsearch.org">ElasticSearch</a>. At this time there is far more written about SOLR and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under very active development. </p>
-<p>The Google Search Appliance offerings are expensive and have a lot of functionality limitations, they are great for simple search collections, Google also has a cloud based search offering, which has considerably less features than the appliance. The best google alternative is to point your visitors at google.com with a site qualifier in the redirect (or any other public search engine). For a lot of developers the AWS CloudSearch service is going to be of great interest, while not free as SOLR is the administrative costs will for most enterprises make it the cheaper choice vs SOLR or Google Appliance, on the downside it has a far more limited feature set than SOLR and does not offer the option of going under the hood as Lucene provides to SOLR. If you want to look at even more options Google or DuckDuckGo (who don't seem to be trying to sell search tools at the moment) will help you find them.</p>
+<p>The most obvious alternative to Solr is direct implementation of Lucene. Since the purpose of Solr is to provide a more useable interface to Lucene in the first place, this does not seem like a good way to get started. An Alternative to Solr that is also built on Lucene is <a href="http://www.elasticsearch.org">ElasticSearch</a>. At this time there is far more written about Solr and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under very active development. </p>
+<p>The Google Search Appliance offerings are expensive and have a lot of functionality limitations, they are great for simple search collections, Google also has a cloud based search offering, which has considerably less features than the appliance. The best google alternative is to point your visitors at google.com with a site qualifier in the redirect (or any other public search engine). For a lot of developers the AWS CloudSearch service is going to be of great interest, while not free as Solr is the administrative costs will for most enterprises make it the cheaper choice vs Solr or Google Appliance, on the downside it has a far more limited feature set than Solr and does not offer the option of going under the hood as Lucene provides to Solr. If you want to look at even more options Google or DuckDuckGo (who don't seem to be trying to sell search tools at the moment) will help you find them.</p>
 
 <h2 id="Perl-Modules">Perl Modules</h2>
 
-<p>There are a number of Perl Modules available for SOLR, the two that appear the most viable are Apache::Solr and WebService::Solr. Unfortunately, all of the modules have problems both in bugs and unimplemented features. On my first go round they all failed. When trying out a module my normal initial criteria is following the documentation or how-to article to get some core of basic features working.</p>
+<p>There are a number of Perl Modules available for Solr, the two that appear the most viable are Apache::Solr and WebService::Solr. Unfortunately, all of the modules have problems both in bugs and unimplemented features. I looked at these and some other options and my first time through none of them rated satisfactory. Initally I had the best luck with Apache::Solr but was not very satisfied with it. After reading through the source code several of the modules, I decided to work with WebService::Solr.</p>
+
+<h1 id="Preparing-the-Environment">Preparing the Environment</h1>
+
+<p>You will need to obviously have a Catalyst Development Environment, in addition you should install WebService::Solr and optionally Catalyst::Model::WebService::Solr. You will also need to download a copy of Solr from <a href="http://lucene.apache.org/solr/downloads.html">http://lucene.apache.org/solr/downloads.html</a>.</p>
 
 <h1 id="SECTIONS">$SECTIONS</h1>
 
