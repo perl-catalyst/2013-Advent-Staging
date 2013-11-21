@@ -30,7 +30,15 @@ all of the modules have problems both in bugs and unimplemented features. I look
 
 =head1 Preparing the Environment
 
-You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and optionally Catalyst::Model::WebService::Solr. You will also need to install a JVM like open JDK and then download a copy of Solr  from L<http://lucene.apache.org/solr/downloads.html|http://lucene.apache.org/solr/downloads.html>.  Once downloaded and extracted you will need to load the example data. To save space I'll refer you to the Solr tutorial, to speed up you can use the post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the documents.
+You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and optionally Catalyst::Model::WebService::Solr. You will also need to install a JVM like open JDK and then download a copy of Solr  from L<http://lucene.apache.org/solr/downloads.html|http://lucene.apache.org/solr/downloads.html>.  Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I'll refer you to the Solr tutorial, to speed up you use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents.
+ 
+ Terminal 1
+ cd ..path_to../example
+ java -jar start.jar
+ 
+ Terminal 2
+ cd ..path_to../example/exampledocs
+ ./post.sh *.xml
 
 =head1 How Implement a Thin Model
 
