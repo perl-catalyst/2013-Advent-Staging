@@ -74,7 +74,7 @@ L<Catalyst::Plugin::ConfigLoader>) to manage it.  The key takes an ArrayRef
 where elements can be the name of distribution under L<Plack::Middleware> (the
 named middleware C<Debug> would refer to L<Plack::Middleware::Debug>, an
 instance of a middleware object, a subroutine reference for inlined middlware
-or middleware under your application namespace.  The follow is all correctly
+or middleware under your application namespace.  The following is all correctly
 formed:
 
     __PACKAGE__->config(
@@ -94,9 +94,9 @@ formed:
       ],
     );
 
-See L<Catalyst\PSGI-MIDDLEWARE> for more details.
+See L<Catalyst/PSGI-MIDDLEWARE> for more details.
 
-=head1 Why use Middleware?
+=head1 Why Use Middleware?
 
 Use middleware in cases where there is existing middleware who's functionality
 you want to reuse in your L<Catalyst> application, or when you have some logic
@@ -108,7 +108,7 @@ choice.
 
 =head1 How Does it Work?
 
-Think of middleware as layers in an onion, which you application at the center.
+Think of middleware as layers in an onion, with you application at the center.
 As a request comes in, you go down each layer in the onion til you hit the 
 the application.  Then, as you go out, you pass each layer again (but this time
 from the center outward).
@@ -118,7 +118,7 @@ On the way out it can alter the response.
 
 You can even use middleware as a way to produce responses (such as to have a
 default not found page, or to catch exceptions that your application throws)
-or to redirect the flow the the request to a totally different application.
+or to redirect the flow of the request to a totally different application.
 For example, you might wish to port your old application to run on L<Catalyst>;
 you can wrap some middleware to send the request to your new L<Catalyst> based
 application, and if it returns a 'not found' response, allow it to continue on
@@ -171,20 +171,16 @@ application, but we'll look at that in a bit!  Lets look at our custom middlewar
 
     package MyApp::Web::Middleware::Delegate;
 
-    use base 'Plack::Middleware';
-
-    our $VERSION = '0.001';
-    our $CODE = 404;
-
     use strict;
     use warnings;
+    use base 'Plack::Middleware';
     use Plack::Util::Accessor 'psgi_app';
 
     sub call {
       my ($self, $env) = @_;
       my $psgi_response = $self->psgi_app->($env);
 
-      return $psgi_response->[0] == $CODE ? 
+      return $psgi_response->[0] == 404 ? 
         $self->app->($env) : $psgi_response;
     }
 
@@ -207,7 +203,7 @@ BTW, this functionality is not unlike what you might see with some common
 middleware on CPAN (such as L<Plack::App::Cascade>) but I thought it instructive
 to write our own, just for learning.
 
-Ok great, lets look at the nice and speed L<Web::Simple> application!
+Ok great, lets look at the nice and speedy L<Web::Simple> application!
 
     package MyApp::Web::Simple;
 
@@ -231,11 +227,14 @@ Ok great, lets look at the nice and speed L<Web::Simple> application!
     }
 
 Basically L<Web::Simple> will handle the URL "/websimple-hello" and return a
-404 Not Found response for anything else.  When rendering the response it uses
-the HTML View you defined in the base L<Catalyst> application.  So you can use
-a similar technique to share views and models between applications and frameworks
-but all running under the same core application.  Lets glance at the View
-template:
+404 Not Found response for anything else (the 404 Not Foundis actually built
+into L<Web::Simple>, unlike L<Catalyst> where the default is to not return
+anything at all.)
+
+When rendering the response it uses the HTML View you defined in the base 
+L<Catalyst> application.  So you can use a similar technique to share views
+and models between applications and frameworks but all running under the same
+core application.  Lets glance at the View template (hello.html):
 
     <html>
       <head>
@@ -246,15 +245,20 @@ template:
       </body>
     </html>
 
+Not a complicated template, but it gets the idea across.  This expects one
+variable C<where> which in L<Catalyst> gets stuffed into the stash, but in
+L<Web::Simple> we just add it to the C<render> arguments of the view.
+
 Other possible uses for this approach code be:
 
 =over 4
 
 =item Using L<Web::Machine> to handle your API
 
-L<Web::Machine> has great support for writing truely RESTful application.  What
+L<Web::Machine> has great support for writing truely RESTful applications.  What
 it doesn't have is L<Catalyst>'s great ability to bring data from lots of
-models, or to generate HTML views.  This way you can do both.
+models, or to generate HTML views.  This way you can use the best tool for the
+given job without be forced to given up the ease and structure of L<Catalyst>.
 
 =item Converting a legacy application to run on L<Catalyst>
 
@@ -312,7 +316,7 @@ together.
 =head1 Final Comments
 
 I personally see a big role for middleware in future L<Catalyst>.  When
-it comes down it it, the idea of a L<Plack::Component> (which is the
+it comes down to it, the idea of a L<Plack::Component> (which is the
 parent class of L<Plack::Middleware>) is not terrible different from 
 L<Catalyst::Component>...
 
