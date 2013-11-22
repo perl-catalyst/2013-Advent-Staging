@@ -1,0 +1,34 @@
+=head1 Title
+
+Using PSGI Middleware in Catalyst
+
+=head1 Overview
+
+
+
+=head1 Introduction
+
+
+
+=head1 Why dispatch on HTTP Methods?
+
+
+=head1 How Does it Work?
+
+
+
+=head1 A Full Example
+
+=head1 Caveats and Gotchas
+
+
+
+=head1 Summary
+
+
+
+=head1 Author
+
+John Napiorkowski L<email:jjnapiork@cpan.org>
+
+=cut
