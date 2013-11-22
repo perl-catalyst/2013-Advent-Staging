@@ -19,15 +19,6 @@ sub start : Chained('/')
     $ctx->forward($ctx->view('HTML'));
   }
 
-  sub now : Chained('start')
-    PathPart('catalyst-now') Args(0)
-  {
-    my ($self, $ctx) = @_;
-    my $now = $ctx->model('NowService')->now;
-    $ctx->stash(now=>$now);
-    $ctx->forward($ctx->view('HTML'));
-  }
-
 __PACKAGE__->config(namespace => '' );
 __PACKAGE__->meta->make_immutable;
 

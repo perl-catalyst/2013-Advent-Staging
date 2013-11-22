@@ -1,30 +1,336 @@
 =head1 Title
 
-Using PSGI Middleware in Catalyst
+Using PSGI Integration in Catalyst: Middleware and More
 
 =head1 Overview
 
-
+This is an example application that shows you how to use the
+new L<Catalyst> support for PSGI middleware, and why you might
+want to use it.
 
 =head1 Introduction
 
+Modern versions of L<Catalyst> use L<Plack> as the underlying engine to
+connect your application to an http server.  This means that you can take
+advantage of the full L<Plack> software ecosystem to grow your application
+and to better componentize and re-use your code.
+ 
+Middleware is a large part of this ecosystem.  L<Plack::Middleware> wraps your
+PSGI application with additional functionality, such as adding Sessions ( as in
+L<Plack::Middleware::Session>), Debugging (as in L<Plack::Middleware::Debug>)
+and logging (as in L<Plack::Middleware::LogDispatch> or
+L<Plack::Middleware::Log4Perl>).
+ 
+Generally you can enable middleware in your C<psgi> file, as in the following
+example
+ 
+    #!/usr/bin/env plackup
+ 
+    use strict;
+    use warnings;
+ 
+    use MyApp::Web;  ## Your subclass of 'Catalyst'
+    use Plack::Builder;
+ 
+    builder {
+ 
+      enable 'Debug';
+      enable 'Session', store => 'File';
+ 
+      mount '/' => MyApp::Web->psgi_app;
+ 
+    };
+ 
+Here we are using our C<psgi> file and tools that come with L<Plack> in order
+to enable L<Plack::Middleware::Debug> and L<Plack::Middleware::Session>.  This
+is a nice, clean approach that cleanly separates your L<Catalyst> application
+from enabled middleware.
+ 
+However there may be cases when you'd rather enable middleware via you L<Catalyst>
+application, rather in a stand alone file.  For example, you may wish to let your
+L<Catalyst> application have control over the middleware configuration, so that
+you could enable certain middleware in production, and others development.  You
+can do this with an external C<.psgi> file, but it can get complex and ugly fast
+if your use of middleware is complex.  Also, if middleware is part of the way
+your application works, it makes sense from a design viewpoint for the middleware
+to be part of the application rather than a layer on top.
 
+Starting on v5.90050, L<Catalyst> allows you to add middleware as part of your
+normal setup and configuration.  Let's port the above example:
 
-=head1 Why dispatch on HTTP Methods?
+    package MyApp::Web;
 
+    use Catalyst;
+
+    __PACKAGE__->config(
+      psgi_middleware => [
+        'Debug',
+        'Session' => {store => 'File'},
+    ]);
+
+C<psgi_middleware> is just a key in your application configuration, so you can
+use other tools in the configuration ecosystem (such as
+L<Catalyst::Plugin::ConfigLoader>) to manage it.  The key takes an ArrayRef
+where elements can be the name of distribution under L<Plack::Middleware> (the
+named middleware C<Debug> would refer to L<Plack::Middleware::Debug>, an
+instance of a middleware object, a subroutine reference for inlined middlware
+or middleware under your application namespace.  The follow is all correctly
+formed:
+
+    __PACKAGE__->config(
+      'psgi_middleware', [
+        'Debug',
+        '+MyApp::Custom',
+        $stacktrace_middleware,
+        'Session' => {store => 'File'},
+        sub {
+          my $app = shift;
+          return sub {
+            my $env = shift;
+            $env->{myapp.customkey} = 'helloworld';
+            $app->($env);
+          },
+        },
+      ],
+    );
+
+See L<Catalyst\PSGI-MIDDLEWARE> for more details.
+
+=head1 Why use Middleware?
+
+Use middleware in cases where there is existing middleware who's functionality
+you want to reuse in your L<Catalyst> application, or when you have some logic
+that is global to the request / response cycle that you wish to isolate.  Very
+often when you are thinking of writing a L<Catalyst::Plugin> or hacking into
+L<Catalyst::Request> / L<Catalyst::Response> or you are using controller end
+actions to modify the outgoing response, then middleware might be a better
+choice.
 
 =head1 How Does it Work?
 
+Think of middleware as layers in an onion, which you application at the center.
+As a request comes in, you go down each layer in the onion til you hit the 
+the application.  Then, as you go out, you pass each layer again (but this time
+from the center outward).
 
+So as the request comes in, your middleware can access and alter the psgi $env.
+On the way out it can alter the response.
+
+You can even use middleware as a way to produce responses (such as to have a
+default not found page, or to catch exceptions that your application throws)
+or to redirect the flow the the request to a totally different application.
+For example, you might wish to port your old application to run on L<Catalyst>;
+you can wrap some middleware to send the request to your new L<Catalyst> based
+application, and if it returns a 'not found' response, allow it to continue on
+to the old application.  In this way you can port your website to a modern
+framework 'url by url' rather than try to do a ground up redo in one release.
+
+See L<Plack::Middleware> for more on middleware.
 
 =head1 A Full Example
 
-=head1 Caveats and Gotchas
+Let's build a L<Catalyst> application that uses middleware to redirect some
+of the requests to a L<Web::Simple> application.  A good use for something
+like this could be a case when you have some time sensitive responses, such
+as autocomplete or similar json API and your L<Catalyst> application has too
+much overhead (sessions, authentication, etc.)  To make it more  fun, lets
+have the L<Web::Simple> application use some components from your main
+L<Catalyst> application (lets say to use the L<Catalyst> view) so we can see
+how this approach lets you mix and match the best of both worlds.
 
+Full example code can be found here:
 
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/PSGI-Middleware>
+
+Let's start with the application class:
+
+    package MyApp::Web;
+
+    use Catalyst;
+    use MyApp::Web::Simple;
+
+    __PACKAGE__->config(
+      psgi_middleware => [
+        'Delegate' => { psgi_app =>
+          MyApp::Web::Simple->new(
+            app => __PACKAGE__
+          )->to_psgi_app },
+      ]);
+
+    __PACKAGE__->setup;
+
+So there's a few things going on here but the gist of it is that we are saying
+this application uses the 'Delegate' middleware.  Since we didn't specify the
+full middleware namespace, it will look first for L<MyApp::Web::Middleware::Delegate>
+and then L<Plack::Middleware::Delegate> (this is so that you can wrap and customize
+existing middleware, should you choose).  In this case there is a 
+C<MyApp::Web::Middleware::Delegate> so that gets passed a single parameterized
+argument, which in this case is pointing to your L<Web::Simple> based
+application.  That, BTW has an argument which points back to your L<Catalyst>
+application, but we'll look at that in a bit!  Lets look at our custom middleware:
+
+    package MyApp::Web::Middleware::Delegate;
+
+    use base 'Plack::Middleware';
+
+    our $VERSION = '0.001';
+    our $CODE = 404;
+
+    use strict;
+    use warnings;
+    use Plack::Util::Accessor 'psgi_app';
+
+    sub call {
+      my ($self, $env) = @_;
+      my $psgi_response = $self->psgi_app->($env);
+
+      return $psgi_response->[0] == $CODE ? 
+        $self->app->($env) : $psgi_response;
+    }
+
+Since L<Catalyst> is L<Moose> based, we tend to use L<Moose> quite a bit, however
+in the case of this middleware there's no reason to not just follow how most other
+middleware projects work and just inherit from L<Plack::Middleware>.
+
+There's one function of important here, which middleware expects you to define,
+which is C<call>.  This function is basically that onion layer I spoke of before
+where you get the C<PSGI> $env on the way in, and then access to the $psgi_response
+on the way out.
+
+What this code is saying is, "I get $env and pass it to C<psgi_app> (which is
+the L<Web::Simple> application that got added in the L<Catalyst> application
+configuration) and if that application returns a code 404 (Not Found) then send
+$env along to the L<Catalyst> application, otherwise use the L<Web::Simple>
+response and short circuit calling L<Catalyst>."
+
+BTW, this functionality is not unlike what you might see with some common
+middleware on CPAN (such as L<Plack::App::Cascade>) but I thought it instructive
+to write our own, just for learning.
+
+Ok great, lets look at the nice and speed L<Web::Simple> application!
+
+    package MyApp::Web::Simple;
+
+    use Web::Simple;
+
+    has 'app' => (is=>'ro', required=>1);
+
+    sub render_hello {
+      my ($self, $where) = @_;
+      return $self->app->view('HTML')->render($self->app,
+        'hello.html', {where=>'web-simple'} );
+    }
+
+    sub dispatch_request {
+      my $self = shift;
+      sub (/websimple-hello) {
+        [ 200, [ 'Content-type', 'text/html' ],
+          [$self->render_hello]
+        ],
+      },
+    }
+
+Basically L<Web::Simple> will handle the URL "/websimple-hello" and return a
+404 Not Found response for anything else.  When rendering the response it uses
+the HTML View you defined in the base L<Catalyst> application.  So you can use
+a similar technique to share views and models between applications and frameworks
+but all running under the same core application.  Lets glance at the View
+template:
+
+    <html>
+      <head>
+        <title>Hello From [% where %]</title>
+      </head>
+      <body>
+        <h1>Hello From [% where %]</h1>
+      </body>
+    </html>
+
+Other possible uses for this approach code be:
+
+=over 4
+
+=item Using L<Web::Machine> to handle your API
+
+L<Web::Machine> has great support for writing truely RESTful application.  What
+it doesn't have is L<Catalyst>'s great ability to bring data from lots of
+models, or to generate HTML views.  This way you can do both.
+
+=item Converting a legacy application to run on L<Catalyst>
+
+This lets you port your web application over 'url by url'.  You can even use
+this to help you refactor an existing L<Catalyst> application that has gotten
+a bit more crusty over the years than you'd prefer.
+
+=back
+
+Other ideas might commend themselves to you.  Lets see the L<Catalyst> side
+of things and look at the controller:
+
+package MyApp::Web::Controller::Root;
+ 
+    use Moose;
+    use MooseX::MethodAttributes;
+
+    extends 'Catalyst::Controller';
+
+    sub start : Chained('/')
+     PathPrefix CaptureArgs(0)
+    {
+      my ($self, $ctx) = @_;
+    }
+
+      sub hello : Chained('start')
+       PathPart('catalyst-hello') Args(0)
+      {
+        my ($self, $ctx) = @_;
+        $ctx->stash(where=>'Catalyst');
+        $ctx->forward($ctx->view('HTML'));
+      }
+
+    __PACKAGE__->config(namespace => '' );
+    __PACKAGE__->meta->make_immutable;
+
+The chaining here might be a bit gratuitious but you get the idea I hope.
+Finallty lets see the test cases to make sure everything works as expected:
+
+    use Test::Most;
+    use Catalyst::Test 'MyApp::Web';
+
+    ok( get('/catalyst-hello') =~ /Catalyst/ );
+    ok( get('/websimple-hello') =~ /web-simple/ );
+
+    done_testing;
+
+Go see the linked code on Github:
+
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/PSGI-Middleware>
+
+For more code and more tests to see how the whole distribution is put
+together.
+
+=head1 Final Comments
+
+I personally see a big role for middleware in future L<Catalyst>.  When
+it comes down it it, the idea of a L<Plack::Component> (which is the
+parent class of L<Plack::Middleware>) is not terrible different from 
+L<Catalyst::Component>...
+
+Stay tuned!
+
+=head1 Also See
+
+L<Catalyst::Plugin::EnableMiddleware> gives you similar functionality for
+older versions of L<Catalyst>.
 
 =head1 Summary
 
+Middleware is another way to build and extend your L<Catalyst> based
+applications. It can be used to bring functionality from other common
+code (opensource or otherwise) and it opens the door to new approaches
+to solving many existing problems.  Next time you need better control
+over your L<Catalyst> request and response, or you think of using a
+global plugin, ask yourself if middleware might not be the better option.
 
 
 =head1 Author
