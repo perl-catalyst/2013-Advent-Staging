@@ -51,7 +51,7 @@ It works like this:
       },
     );
 
-Basically L<Catalyst> defines a new global configuration options C<data_handlers>
+Basically L<Catalyst> defines a new global configuration option C<data_handlers>
 which is a hashref where the key is a standard MIME content-type and the value
 is a subroutine reference that is intended to parse that content type.
 
@@ -88,13 +88,27 @@ keep on doing that without any impact at all on your request overhead.
 Here's how this could look in you controller.  Lets assume the incoming is
 C<application/json> like "{'name':'Jason','age':'25'}":
 
-    sub update_user : POST Consumes(JSON) Path(/User) {
+    sub update_user : POST Path(/User) Consumes(JSON) {
       my $p = (my $c = pop)->req->body_data;
       $c->res->body("My name is $posted->{name} and my age is $p->{age}");
     }
 
 Basically this is very similar to the request object's C<body_parameters>
 method but is data focused on alternative POSTed or PUT request content.
+
+The built in JSON decoder just returns a hashref, which is similar to many
+other frameworks but there's nothing stopping you from returning any type
+of scalar reference, including an object.
+
+So that's really it!
+
+=head1 Caveats, gotchas...
+
+Although unicode is supported out of the box with L<Catalyst> information
+in the C<$_> localized filehandle is basically just as it comes from the
+client.  You may need to do additional decoding.  This might change in 
+the future, but in the absence of clear requirements the authors felt it best
+to not guess to far in advance.
 
 =head1 Summary
 
