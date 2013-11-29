@@ -9,15 +9,17 @@ write operations work.  This enables better support for working inside
 common event loops such as L<AnyEvent> and <IO::Async> to support
 non blocking writes to stream large files.
 
+Lets explore how L<PSGI> implements delayed and streaming responses
+and how we can use streaming response with an event loop to enable
+use of nonblocking IO.  Then lets see how L<Catalyst> exposes that
+API.  This part one of a three part series,
+
 =head1 Introduction
 
 When L<Catalyst> was ported to run as a native L<PSGI> application,
 great pains were taken to make sure we could properly support delayed
 and streaming responses.  However only recently was that ability 
-properly exposed as L<Catalyst> API.  Let's review how L<Catalyst>
-creates a PSGI application and how the response API has changed to
-give you this control.
-
+properly exposed as L<Catalyst> API.  
 =head1 PSGI Delayed Response and Streaming
 
 You are likely familiar with the basic L<PSGI> 'hello world' application
