@@ -4,7 +4,7 @@ use Moose;
 
 extends 'Catalyst::Model::Factory';
 
-has 'counter' => (is=>'ro', required=>1);
+has 'counter' => (is=>'ro', isa=>'Num', required=>1);
 
 sub prepare_arguments {
   my ($self, $c, $args) = @_;
