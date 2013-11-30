@@ -1,0 +1,301 @@
+=head1 Title
+
+Nonblocking and Streaming 
+
+=head1 Overview
+
+Modern versions of L<Catalyst> allow you to take charge of how your
+write operations work.  This enables better support for working inside
+common event loops such as L<AnyEvent> and <IO::Async> to support
+non blocking writes to stream large files.
+
+Lets explore how L<PSGI> implements delayed and streaming responses
+and how we can use streaming response with an event loop to enable
+use of nonblocking IO.  Then lets see how L<Catalyst> exposes that
+API.  This part three of a four part series.
+
+=head1 Introduction
+
+We've seen how L<PSGI> allows us to stream long responses and even how
+it works with HTTP 1.1 features such as keep alive.  Now, lets see how
+those features can take advantage of non blocking IO, and how L<PSGI>
+runs under event loops.
+
+=head1 Nonblocking
+
+Sometimes when you are streaming data you encounter a process that takes a
+long time.  For example, you page requires several long running SQL queries
+to build.  Or you have a simple case where you want to stream something
+infinitely.  For example, here's an application that sends the time as a
+string followed my a newline once a second, and continues doing so unless
+the client breaks the connection:
+
+    my $psgi_app = sub {
+      my $env = shift;
+      return sub {
+        my $responder = shift;
+        my $writer = $responder->(
+          [200, [ 'Content-Type' => 'text/plain' ]]);
+
+        while(1) {
+          $writer->write(scalar localtime);
+          sleep 1;
+        }
+
+      };
+    };
+
+You might do something like this as a heartbeat monitor, or to stream date
+infinitely to a client (stuff like log into, server status, anything you
+want realtime, or even for gaming applications where you are sending out
+information about the location of a character in realtime).
+
+The problem here is that when using a blocking server like L<Starman>
+you can never have more infinite connections than you have running forks
+(defaults to 5 in the current version of L<Starman>.)   So, if you are
+running a huge gaming server that wants to send out continuous information
+about the realtime locations of characters and actions what can you do?
+You can run lots and lots of servers (expensive).  Or you can change your
+architecture to have the clients poll the server at regular intervals to
+get updated data.  This is a good option and can scale very well, but it
+is not suitable for all use cases.  If you have that specific use case
+where you need to maintain a long lived connection to each client, and you
+expect 100s or thousands or more clients, what can you do?
+
+Modern operating systems allow for a concept called 'non blocking I/O'
+this means that when you initiate I/O, over a socket, or a filehandle,
+you don't need to wait until the process is complete, but instead you can
+register a callback (basically an anonymous subroutine) that gets 
+called when the I/O job is complete.  You can even register callbacks
+to handle exceptional events.  This means that instead of having a limited
+number of forked processes that can handled one connection each, you can
+have many (limited by how your operating system is setup and what resources it
+has) connections all at once.  The trick here is that instead of doing
+one thing at a time, we have an event loop which manages a schedule of
+events.
+
+Lets rewrite the blocking application to run under an evented server:
+
+    use AnyEvent;
+    use warnings;
+    use strict;
+
+    my $watcher;
+    my $timer_model = sub {
+      my $writer = shift;
+      $watcher = AnyEvent->timer(
+        after => 0,
+        interval => 1,
+        cb => sub {
+          $writer->write(scalar localtime ."\n");
+        });
+    };
+
+    my $psgi_app = sub {
+      my $env = shift;
+      return sub {
+        my $responder = shift;
+        my $writer = $responder->(
+          [200, [ 'Content-Type' => 'text/plain' ]]);
+
+        $timer_model->($writer);
+        
+      };
+    };
+
+There's a number of popular systems for managing event loops under Perl,
+including L<POE>, L<AnyEvent> and L<IO::Async>.  For this example I choose
+to use L<AnyEvent>.  Let's break down the application and see what (if anything)
+this is buying use.
+
+First off, instead of just creating an infinite loop, we create an anonymous
+subroutine to encapsulate the L<AnyEvent> timer model.  If you look carefully
+you'll notice this is a closure, which we need in order to make sure the 
+C<$watcher> doesn't go out of scope.  C<$watcher> is a sort of pointer to
+the event loop, and if it gets undefined by going out of scope, then the timer
+itself would get removed from the event loop, and never run.  We could have
+just as easily made this a real object, but a closure is simpler for this case.
+
+Then, when the the L<PSGI> application runs and receives a request, it invokes
+the closure with the C<$writer> object.  This then starts a timer event, which
+every second runs the callback to output the time.
+
+So, how is this better than the shorter an more simple version that runs under
+L<Starman>?  This timer is not waiting a second between callback.  It not
+blocking the server.  As a result, the L<Twiggy> based server can accept many
+more connections than L<Starman> with relatively low overhead in doing so.
+Generally you can have hundreds or even thousands of concurrent connections
+using this technique and have far lower overhead than if you have L<Starman>
+running with 1000 or 2000 forked children.  We can see this in action
+
+    $ TWIGGY_DEBUG=1 plackup bin/time-server-evented.psgi 
+    Listening on 0.0.0.0:5000
+    Twiggy: Accepting connections at http://0.0.0.0:5000
+
+Now lets open this in telnet
+
+    $ telnet 127.0.0.1 5000
+    Trying 127.0.0.1...
+    Connected to localhost.
+    Escape character is '^]'.
+    GET / HTTP/1.0
+
+    HTTP/1.0 200 OK
+    Content-Type: text/plain
+
+    Thu Nov 28 18:12:33 2013
+    Thu Nov 28 18:12:34 2013
+    Thu Nov 28 18:12:35 2013
+    Thu Nov 28 18:12:36 2013
+    Thu Nov 28 18:12:37 2013
+    Thu Nov 28 18:12:38 2013
+    Thu Nov 28 18:12:39 2013
+    Thu Nov 28 18:12:40 2013
+    Thu Nov 28 18:12:41 2013
+
+If you run this yourself (just checkout the repo on Github, links below) you
+will note two things.  First of all, L<Twiggy> is not HTTP/1.1 compliant,
+so we send a HTTP/1.0 GET request.  So L<Twiggy> isn't supporting chunked
+encoding and you'd have to request keep alive if you want it.  Its not a big
+deal just something to pay attention to.
+
+Another thing you'd note is that unlike L<Starman>, L<Twiggy> does not have
+a timeout on the connection.  This is because with L<Twiggy> the overhead on
+the connection is very low, each incoming request does not need to tie up an
+entire child fork (like with L<Starman>, or other forking and/or blocking
+servers.)  Instead, the server listens for events and when an event comes in
+the appropriate callback gets to handle it.  In the background, the event loop
+is managing all the events.
+
+The big win here is that the new version of this app can allow many, many
+connections all at once, and each connection can listen to the infinite 
+stream (unlike with L<Starman> where you are limited to the number of running
+workers).
+
+Lets prove that by using Apache C<ab> ( a simple load tester that comes with
+the apache webserver).  First, lets change the application to finalize the
+connection after 4 seconds:
+
+    use AnyEvent;
+    use warnings;
+    use strict;
+
+    my $watcher;
+    my $timer_model = sub {
+      my $writer = shift;
+      my $count = 1;
+      $watcher = AnyEvent->timer(
+        after => 0,
+        interval => 1,
+        cb => sub {
+          $writer->write(scalar localtime ."\n");
+          if(++$count > 5) {
+            $writer->close;
+            undef $watcher;
+          }
+        });
+    };
+
+    my $psgi_app = sub {
+      my $env = shift;
+      return sub {
+        my $responder = shift;
+        my $writer = $responder->(
+          [200, [ 'Content-Type' => 'text/plain' ]]);
+
+        $timer_model->($writer);
+        
+      };
+    };
+
+Start this up:
+
+    $ TWIGGY_DEBUG=1 plackup bin/five-times-evented.psgi 
+    Listening on 0.0.0.0:5000
+    Twiggy: Accepting connections at http://0.0.0.0:5000/
+
+Ok so each request is going to take 4 seconds to finish.  We can see that
+via telnet:
+
+    $ telnet 127.0.0.1 5000
+    Trying 127.0.0.1...
+    Connected to localhost.
+    Escape character is '^]'.
+    GET / HTTP/1.0
+
+    HTTP/1.0 200 OK
+    Content-Type: text/plain
+
+    Thu Nov 28 19:56:15 2013
+    Thu Nov 28 19:56:16 2013
+    Thu Nov 28 19:56:17 2013
+    Thu Nov 28 19:56:18 2013
+    Thu Nov 28 19:56:19 2013
+    Connection closed by foreign host.
+
+So, if a similar application was running under L<Starman>, with 5 running forks
+(the default), and you hit the server with 100 simultaneous requests, you'd 
+expect the entire thing to take about 80 seconds (likely more because of network
+latency and so forth, but it would never be faster).  What happens if we hit
+this with Apache C<ab> with the same concurrent 100 requests?
+
+    $ ab -n100 -c100 http://127.0.0.1:5000/
+    This is ApacheBench, Version 2.3 <$Revision: 655654 $>
+    Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+    Licensed to The Apache Software Foundation, http://www.apache.org/
+
+    Benchmarking 127.0.0.1 (be patient).....done
+      
+    Server Hostname:        127.0.0.1
+    Server Port:            5000
+
+    Document Path:          /
+    Document Length:        0 bytes
+
+    Concurrency Level:      100
+    Time taken for tests:   4.039 seconds
+    Complete requests:      100
+    Failed requests:        2
+       (Connect: 0, Receive: 0, Length: 2, Exceptions: 0)
+    Write errors:           0
+    Total transferred:      4650 bytes
+    HTML transferred:       150 bytes
+    Requests per second:    24.76 [#/sec] (mean)
+    Time per request:       4039.357 [ms] (mean)
+    Time per request:       40.394 [ms] (mean, across all concurrent requests)
+    Transfer rate:          1.12 [Kbytes/sec] received
+
+So the whole thing took a bit over four seconds!  And we handled the 100 connections
+all at the same time!
+
+That's the upside of the extra work of running everything in an evented manner
+and taking advantage of nonblocking IO.
+
+B<Note> I just want to point out to make a robust system you need to take care
+to monitor and handle error events, since everything is running under one big
+process any uncaught errors can crash the server!
+
+B<Note> I also want to point out that although high concurrency is a great trick
+to have, concurrency alone isn't the only answer to high scale.  Depending on the
+type of application you are building it may or may not have value.
+
+Ok, so now you have the basics of evented and nonblocking IO!  Lets port this
+very application to run as a L<Catalyst> application!  (In the next article
+of course...)
+
+=head1 For More Information
+
+Code associated with this article:
+
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/1to4-Nonblocking-Streaming>
+
+=head1 Summary
+
+We've introduced how to use an event loop with a non blocking webserver such as
+L<Twiggy> to write a non blocking PSGI application.
+
+=head1 Author
+
+John Napiorkowski L<email:jjnapiork@cpan.org>
+
+=cut

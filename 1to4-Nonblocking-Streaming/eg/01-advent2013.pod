@@ -12,7 +12,7 @@ non blocking writes to stream large files.
 Lets explore how L<PSGI> implements delayed and streaming responses
 and how we can use streaming response with an event loop to enable
 use of nonblocking IO.  Then lets see how L<Catalyst> exposes that
-API.  This part one of a three part series.
+API.  This part one of a four part series.
 
 =head1 Introduction
 
@@ -105,13 +105,13 @@ use is to give it just the first two elements of the tuple, as we do in
 this example application.  In this case the C<$responder> returns the server's
 C<$writer> object, which basically is like a filehandle that points at the
 client which originated the request (for example a web browser or the
-C<lwp-request> commandline application).  This object defines two methods,
+C<telnet> commandline application).  This object defines two methods,
 C<write> and C<close>.  Each time you call C<write> you stream some data
 out to the client.  Generally the connection stays open until you call
 C<close>, which means you can use this for long responses or for techniques
 like cometd where you keep a connection to the client open for a long time.
 
-<B*Note:> Even thought I say the $writer object can be thought of as a file
+B<*Note:> Even thought I say the $writer object can be thought of as a file
 handle to the client, the underlying architecture is both more complex and
 yet lacking in some of the features we expect from a filehandle.  For
 example, in the current PSGI spec, there's no clear and common way to detect
@@ -321,19 +321,22 @@ getting the length is computationally expensive, or can't be known initially, or
 when the intention is to send infinitely.  The two concepts overlap in use case
 but the technology themselves is separate.
 
-
-
+Great, so that's how L<PSGI>  does delayed response and streaming.  In the
+following article, we'll take look at how this works under L<Catalyst>.
 
 =head1 For More Information
 
-More examples of Asynchronous Code: L<
+Code associated with this article:
+
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/1to4-Nonblocking-Streaming>
 
 =head1 Summary
 
-Review of what the reader just learned.
+We've reviewed various parts of the L<PSGI> specification, and set a good
+foundation of understanding to proceed with the remaining articles.
 
 =head1 Author
 
-Your Name <your@email.com> | IRC nick
+John Napiorkowski L<email:jjnapiork@cpan.org>
 
 =cut
