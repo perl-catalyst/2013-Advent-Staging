@@ -1,0 +1,38 @@
+=head1 Title
+
+A Websocket's Echo Server in L<Catalyst>
+
+=head1 Overview
+
+This past year L<Catalyst> got the basics of support for long / persistent
+connections so that you could build realtime applications over cometd and
+websockets.  Lets build the classic websockets echo server.
+
+=head1 Introduction
+
+"The websockets specification defines an API that enables web pages to use the
+WebSockets protocol for two-way communication with a remote host." - L<http://www.websocket.org/aboutwebsocket.html>.
+
+One of the basic examples you find on the websockets website is the Echo server
+which you can see over here: L<http://www.websocket.org/echo.html>  Any web
+framework which claims support should provide a version, just to show off the
+basics.  Let's do it in L<Catalyst>!
+
+=head1 Porting this to Catalyst
+
+
+Code associated with this article:
+
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/NonBlocking-File-Streaming>
+
+=head1 Summary
+
+Although support for techniques like websockets is still rather new to 
+L<Catalyst> you can still use it for testing and for helping us figure
+out where to go next.  So, go play!
+
+=head1 Author
+
+John Napiorkowski L<email:jjnapiork@cpan.org>
+
+=cut
