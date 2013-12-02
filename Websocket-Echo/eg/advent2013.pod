@@ -18,18 +18,199 @@ which you can see over here: L<http://www.websocket.org/echo.html>  Any web
 framework which claims support should provide a version, just to show off the
 basics.  Let's do it in L<Catalyst>!
 
-=head1 Porting this to Catalyst
+=head1 The Controller
+
+    package MyApp::Controller::Root;
+
+    use base  'Catalyst::Controller';
+    use Protocol::WebSocket::Handshake::Server;
+    use AnyEvent::Handle;
 
 
-Code associated with this article:
+    sub index :Path(/)
+    {
+      my ($self, $c) = @_;
+      my $url = $c->uri_for_action($self->action_for('ws'));
+      
+      $url->scheme('ws');
+      $c->stash(websocket_url => $url);
+      $c->forward($c->view('HTML'));
+    }
 
-L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/NonBlocking-File-Streaming>
+    sub ws :Path(/echo)
+    {
+      my ($self, $c) = @_;
+      my $io = $c->req->io_fh;
+      my $hs = Protocol::WebSocket::Handshake::Server
+        ->new_from_psgi($c->req->env);
+
+      $hs->parse($io);
+
+      my $hd = AnyEvent::Handle->new(fh => $io);
+      $hd->push_write($hs->to_string);
+      $hd->push_write($hs->build_frame(buffer => "Echo Initiated")->to_bytes);
+
+      $hd->on_read(sub {
+        (my $frame = $hs->build_frame)->append($_[0]->rbuf);
+        while (my $message = $frame->next) {
+          $message = $hs->build_frame(buffer => $message)->to_bytes;
+          $hd->push_write($message);
+        }
+      });
+    }
+
+    __PACKAGE__->config( namespace => '');
+
+So there's a controller with jsut two actions.  Lets look at the first:
+
+    sub index :Path(/)
+    {
+      my ($self, $c) = @_;
+      my $url = $c->uri_for_action($self->action_for('ws'));
+      
+      $url->scheme('ws');
+      $c->stash(websocket_url => $url);
+      $c->forward($c->view('HTML'));
+    }
+
+All we are doing here is creating a single URL in the stash and sending it
+on to the view.  This is the URL of the websockets handler (which is why we
+need to change the schema to 'ws'.
+
+We are not using the standard 'renderview' actionclass in this trivial
+application so I go ahead and forward on the view.  Personally I am not a fan
+of the renderview actionclass and quite often just handle it like this.
+
+Lets look at the view (warning Javascript ahead for the unwilling).
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <title>WebSocket Echo Client</title>
+      <meta charset="UTF-8" />
+      <script>
+        "use strict";
+        window.addEventListener("load", function(event) {
+          var status = document.getElementById("status");
+          var url = document.getElementById("url");
+          var open = document.getElementById("open");
+          var close = document.getElementById("close");
+          var send = document.getElementById("send");
+          var text = document.getElementById("text");
+          var message = document.getElementById("message");
+          var socket;
+
+          status.textContent = "Not Connected";
+          url.value = "[% websocket_url %]";
+          close.disabled = true;
+          send.disabled = true;
+
+          // Create a new connection when the Connect button is clicked
+          open.addEventListener("click", function(event) {
+            open.disabled = true;
+            socket = new WebSocket(url.value);
+
+            socket.addEventListener("open", function(event) {
+              close.disabled = false;
+              send.disabled = false;
+              status.textContent = "Connected";
+            });
+
+            // Display messages received from the server
+            socket.addEventListener("message", function(event) {
+              message.textContent = "Server Says: " + event.data;
+            });
+
+            // Display any errors that occur
+            socket.addEventListener("error", function(event) {
+              message.textContent = "Error: " + event;
+              console.log("my object: %o", event);
+            });
+
+            socket.addEventListener("close", function(event) {
+              open.disabled = false;
+              status.textContent = "Not Connected";
+            });
+          });
+
+          // Close the connection when the Disconnect button is clicked
+          close.addEventListener("click", function(event) {
+            close.disabled = true;
+            send.disabled = true;
+            message.textContent = "";
+            socket.close();
+          });
+
+          // Send text to the server when the Send button is clicked
+          send.addEventListener("click", function(event) {
+            socket.send(text.value);
+            text.value = "";
+          });
+        });
+      </script>
+    </head>
+    <body>
+      Status: <span id="status"></span><br />
+      URL: <input id="url" /><br />
+      <input id="open" type="button" value="Connect" />&nbsp;
+      <input id="close" type="button" value="Disconnect" /><br />
+      <input id="send" type="button" value="Send" />&nbsp;
+      <input id="text" /><br />
+      <span id="message"></span>
+    </body>
+    </html>
+
+As this is a L<Catalyst> article, I am not going to step through this line by
+line, but to cover it in general I am using the plainest Javascript here (yes
+if we used a Javascript framework there'd be less code, but I don't want to
+obscure the point with yet another framework). I associate various callbacks
+as event handlers for the most important bits of DOM here.  The biggest part
+is the bit that opens the websocket and does the send and receive.  That gets
+hooked up to the 'ws' action.  Lets look at that.
+
+    sub ws :Path(/echo)
+    {
+      my ($self, $c) = @_;
+      my $io = $c->req->io_fh;
+      my $hs = Protocol::WebSocket::Handshake::Server
+        ->new_from_psgi($c->req->env);
+
+      $hs->parse($io);
+
+      my $hd = AnyEvent::Handle->new(fh => $io);
+      $hd->push_write($hs->to_string);
+      $hd->push_write($hs->build_frame(buffer => "Echo Initiated")->to_bytes);
+
+      $hd->on_read(sub {
+        (my $frame = $hs->build_frame)->append($_[0]->rbuf);
+        while (my $message = $frame->next) {
+          $message = $hs->build_frame(buffer => $message)->to_bytes;
+          $hd->push_write($message);
+        }
+      });
+    }
+
+Since websocket support is new in L<Catalyst> there's not a lot of pretty helpers
+and shortcut methods.  So we need to call L<Protocol::WebSocket> to initiate the
+websocket, and then we create a 'on_read' handler to listen on the socket, and the
+we add to the write queue whatver shows up.
+
+The key to the magic is the L<Catalyst::Request> method C<io_fh>.  This gives you
+low level access to the underlying C<psgix.io> socket, and is also a flag to
+L<Catalyst> so that it never tries to finalize the body (since you are never really
+closing the connection).
+
+So, that's really it!
 
 =head1 Summary
 
 Although support for techniques like websockets is still rather new to 
 L<Catalyst> you can still use it for testing and for helping us figure
 out where to go next.  So, go play!
+
+Code associated with this article:
+
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Websocket-Echo>
 
 =head1 Author
 
