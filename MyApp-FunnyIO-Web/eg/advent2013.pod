@@ -1,0 +1,57 @@
+=head1 Title
+
+Dealing with funny IO::Handle type objects in Catalyst Response
+
+=head1 Overview
+
+Learn how to use L<IO::Handle> objects in the L<Catalyst> response body,
+even when the type of L<IO::Handle> may not work how L<Catalyst> expects.
+
+=head1 A Funny thing happened on the way to the office
+
+A long tradition in open source communities has been the concept of having a 
+mailing list where users and contributors can share queries and information.
+As such the L<Catalyst> community is no exception, and while there is most
+certainly the usual drudge of users grappling with the understanding of core
+concepts (Which most are happy to patiently answer), there are also a few 
+interesting use cases that come up.
+
+There was one such case recently which raised questions over the L<IO::Handle>
+type of object handling in L<Catalyst::Response>. In particular there was a 
+warning present in the user's logs as L<Catalyst> attempted to determine the 
+size of the L<IO::Handle> object it was passed in the response body. This was 
+of course followed by L<Catalyst> issuing a warning that it was serving up the
+content with no pre-determined Content-Length. So what was happening here?
+
+=head1 So what does Catalyst do with a IO::Handle ?
+
+Part of the wrap up of this event was a call from John to ammend the
+documentation to explain more thoroughly what exactly L<Catalyst> does when
+passed and L<IO::Handle> type of object as the response body. And the
+documentation patch goes like this, more or less:
+
+'Catalyst accepts an IO::Handle type of object in the response body in the 
+sense that it reasonably can "read" as a method ...'
+
+So what happens actually? Well here's the code in L<Catalyst>
+
+  # Content-Length
+  if ( defined $response->body && length $response->body && !$response->content_length ) {
+
+    # get the length from a filehandle
+    if ( blessed( $response->body ) && $response->body->can('read') || ref( $response->body ) eq 'GLOB' )
+    {
+      my $size = -s $response->body;
+      if ( $size ) {
+        $response->content_length( $size );
+      }
+      else {
+        $c->log->warn('Serving filehandle without a content-length');
+      }
+    }
+    else {
+      # everything should be bytes at this point, but just in case
+      $response->content_length( length( $response->body ) );
+    }
+  }
+
