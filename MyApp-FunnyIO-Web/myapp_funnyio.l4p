@@ -1,0 +1,18 @@
+log4perl.logger                       = DEBUG, FileAppndr, Screen, DebugPanel
+log4perl.appender.FileAppndr          = Log::Log4perl::Appender::File
+log4perl.appender.FileAppndr.filename = log/server.log
+log4perl.appender.FileAppndr.autoflush = 1
+log4perl.appender.FileAppndr.layout   = PatternLayout
+log4perl.appender.FileAppndr.layout.ConversionPattern=%d [%p] - %m%n
+
+log4perl.appender.Screen              = Log::Log4perl::Appender::Screen
+log4perl.appender.Screen.stderr       = 0
+log4perl.appender.Screen.autoflush    = 1
+log4perl.appender.Screen.layout       = PatternLayout
+log4perl.appender.Screen.layout.ConversionPattern=%d [%p] - %m%n
+
+log4perl.appender.DebugPanel          = Log::Log4perl::Appender::TestBuffer
+log4perl.appender.DebugPanel.name     = psgi_debug_panel
+log4perl.appender.DebugPanel.mode     = append
+log4perl.appender.DebugPanel.layout   = PatternLayout
+log4perl.appender.DebugPanel.layout.ConversionPattern=%d [%p] - %m%n
