@@ -1,0 +1,174 @@
+=head1 Title
+
+CataylstX::Controller::PSGI - Using Plack apps inside Catalyst Controllers - Part 1
+
+=head1 Overview
+
+Sometimes you might want to use a Plack app as part of your application, but
+don't want to mess around with your .psgi file mounting different parts under
+different urls, or running seperate servers and setting up rewrite/proxy rules.
+
+=head1 Introduction
+
+The scenario is thus, we have an existing application, which used to be a
+cgi/modperl application, and we've since wrapped in Plack. Now we've decided
+we want to start using Catalyst, but we don't want to rewite our decade old legacy
+app, and we don't want to run multiple servers or mess around with rewrite rules.
+
+=head1 Prequisites
+
+L<Task::Catalyst>, L<CatalystX::Controller::PSGI>
+
+=head1 The Aim
+
+Wrap our legacy app in Catalyst, so that all requests will dispatch to the existing
+code, unless a new action is created in which case that will take precedence.
+
+Our legacy app has the following actions,
+
+    /some/action
+    /some/other/action
+    /foo
+    /foo/bar
+
+We're going to replace the following action with a Catalyst action
+
+    /some/other/action
+
+=head1 The Code
+
+We'll start by creating a new Cataylst app
+
+    catalyst.pl MyApp
+
+Now that that's out of the way, let's get cracking.
+
+First, edit the new Root.pm to use L<CatalystX::Controller::PSGI> and mount our
+legacy .psgi as the root action
+
+edit MyApp/lib/MyApp/Controller/Root.pm and replace everything with the following,
+since cataylst.pl has given us a lot of helpful defaults, which are not helpful
+in our case.
+
+    package MyApp::Controller::Root;
+    use Moose;
+    use namespace::autoclean;
+
+    BEGIN { extends 'CatalystX::Controller::PSGI' };
+
+    __PACKAGE__->config(namespace => '');
+
+    use Plack::Util;
+
+    has 'legacy_app' => (
+        is      => 'ro',
+        builder => '_build_legacy_app',
+    );
+
+    sub _build_legacy_app {
+        return Plack::Util::load_psgi( MyApp->path_to("bin/legacy.psgi") );
+    }
+
+    sub call {
+        my ( $self, $env ) = @_;
+
+        $self->legacy_app->( $env );
+    }
+
+    __PACKAGE__->meta->make_immutable;
+
+Ok, so what's going on here? The first 7 lines are the standard boilerplate for
+the Root controller, after that we setup a Moose accessor that will hold our
+legacy .psgi app. The important part of this is I<sub call>, which
+L<CatalystX::Controller::PSGI> uses as the / action of this controller. Which
+is also the / of the app, because this is the root controller.
+
+So now any url will match the root action (call is registered as :Local, meaning
+it can take an unlimited amount of arguments). But it still won't work, becuase
+bin/legacy.psgi doesn't exist. So let's fix that by creating it.
+
+    use strict;
+    use warnings;
+    use Plack::Response;
+
+    #let's pretend this is a legacy app wrapped in plack...
+    my $app = sub {
+        my ( $env ) = @_;
+
+        #ugly, but it'll prove our point, which is all that matters
+        my $status = 200;
+        my $body;
+        if ( $env->{PATH_INFO} eq 'some/action' ) {
+            $body = "this is some/action";
+        }
+        elsif ( $env->{PATH_INFO} eq 'some/other/action' ) {
+            $body = "this is some/other/action";
+        }
+        elsif ( $env->{PATH_INFO} eq 'foo' ) {
+            $body = "this is foo";
+        }
+        else {
+            $status = 404;
+            $body = 'not found';
+        }
+
+        my $res = Plack::Response->new( $status );
+        $res->content_type('text/html');
+        $res->body( $body );
+
+        return $res->finalize;
+    };
+
+    $app;
+
+So now our "legacy" app is ready to rock. Let's fire it up.
+
+    plackup -I MyApp/lib MyApp/myapp.psgi
+
+If we fire up our web browser and head to L<http://127.0.0.1:5000/some/other/action>
+you'll see I<"this is some/other/action">, which is great, because it means Catalyst is
+dispatching our requests to the psgi app. Obviously this has a performance hit,
+as we've added the Catalyst request/response cycle in, but it doesn't matter, as
+we're going to gain more than we've lost in the long term.
+
+Next lets replace I</some/other/action> with our new awesome cataylst code.
+
+Create the file MyApp/lib/MyApp/Controller/Some.pm
+
+    touch MyApp/lib/MyApp/Controller/Some.pm
+
+edit the above add the following
+
+    package MyApp::Controller::Some;
+    use Moose;
+    use namespace::autoclean;
+
+    BEGIN { extends 'CatalystX::Controller::PSGI' };
+
+    sub other_action: Path('other/action') {
+        my ( $self, $c ) = @_;
+
+        $c->res->body("WOOO CATALYST");
+    }
+
+    __PACKAGE__->meta->make_immutable;
+
+Now if we fire up our web browser and head to L<http://127.0.0.1:5000/some/other/action>
+we'll see I<"WOOO CATALYST">, which is awesome. Now bolt on some L<DBIx::Class>,
+extract some of the legacy app out into reusable modules, if it's not already,
+combine those with L<Catalyst::Model::Adaptor> and before you know it, you'll be
+a Catalyst app with a little legacy code, rather than a legacy app with a little
+Catalyst
+
+=head1 Summary
+
+Although the above code is simple, and plainly not a real world legacy app, the
+the example still applies, and it's a good start on modernising an old codebase,
+and taking full advantage of the rapid development that Catalyst offers you,
+once it's set up.
+
+=head1 Author
+
+Mark Ellis L<email:nobody@cpan.org>
+
+=cut
