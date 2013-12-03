@@ -55,3 +55,395 @@ So what happens actually? Well here's the code in L<Catalyst>
     }
   }
 
+Okay, so this is what L<Catalyst> tries to reasonable do under this case. Which is in order:
+
+1. I have something in the response body and I don't have a content_length
+defined
+
+2. If I can "reasonably" expect this is an actual Filehandle type of thingy
+then go on
+
+3. Where the above is true, then use a filestat operator to find the size of 
+the Filehandle supplied.
+
+4. Or otherwise just get the bytes coz that should be good enough.
+
+
+=head1 So what was the problem?
+
+Now we look at the particular use case that was presented. In fact the object
+supplied in $c->res-body() was actually an L<IO::Compress::Gunzip> object. 
+Now by all "reasonable" standards L<Catalyst> determines this to be a 
+L<IO::Handle> type of object by the presence of a "read" method on the object.
+
+The problem here is not a L<Catalyst> problem really. It comes down to that the
+use of the filetest operator "-s" does not work with the type of object
+returned from L<IO::Uncompress::Gunzip>. This is not uncommon and tends to be
+shared with other "handle" objects that present "in-memory" without providing
+an acutal "on storage" "filehandle".
+
+So how do we deal with this case?
+
+=head1 Documetnation to the rescue ?
+
+Aha! So the filetest for size as implemented by L<Catalyst> does not work in
+this case. Thinking in general L<IO::Compress::Gunzip> does present an
+interface for "read" as a method, which returns the "uncompressed" bytes from
+the source. But how do we detertime the "uncompressed" size? And this is what
+is wanted afterall. Clearly the filetest just doesn't cut it. So where do we
+go?
+
+Well, let's have a look at "1" above. Which is where we ask 'Do we have a
+"body" *or* has there been a Content_Length supplied in the headers. 
+
+This is the most important part of the Documentation patch, where we say;
+
+'If it is possible to otherwise determine the size of the "handle" then it is
+advised that the Content_Length be set in the headers of the response where
+possible'
+
+So essentially if you know the size or can otherwise determine that size,
+then do it. Thus not leaving it to that L<Catalyst> code to work out the size
+for you. But now we have the problem. How do we get the uncompressed size of 
+the content?
+
+Eureka! More documentation. Apparently the Gzip spec requires that all 
+content hold header information including the uncompressed size of
+that content. So on an L<IO::Uncompress::Gunzip> object there is a method
+available: 
+
+  my $gz = IO::Uncompress::Gunzip->new( \$comp );
+  my $header = $gz->getHeaderInfo;
+  print Dumper( $header );
+
+This should show one of the keys in the returned hash to be ISIZE, which
+contains the uncompressed size of the content. This is what we want for content
+length so we should be okay with something like this for a controller:
+
+
+  package MyApp::FunnyIO::Web::Controller::TestIO;
+  use Moose;
+  use namespace::autoclean;
+
+  BEGIN { extends 'Catalyst::Controller'; }
+
+  use IO::Compress::Gzip qw/gzip $GzipError/;
+  use IO::Uncompress::Gunzip;
+  use Data::Dumper;
+
+  sub index :Path :GET :Args(0) {
+    my ( $self, $c ) = @_:
+
+    my $data = "1234567890ABCDEFGHIJKL";
+    my ( $comp, $body );
+
+    gzip( \$data, \$comp ) || die $GzipError;
+
+    $c->res->content_type('text/plain');
+
+    if ( $c->req->header('accept_encoding') =~ /gzip/ ) {
+      $c->log->debug( 'Sending Compressed' );
+      $c->res->content_encoding( 'gzip' );
+      $body = $comp;
+    } else {
+      $c->log->debug( 'Sending uncompressed' );
+      $body = IO::Uncompress::Gunzip->new( \$comp );
+      $c->res->content_length( $body->getHeaderInfo->{ISIZE} );
+    }
+
+    $c->res->body( $body );
+
+  }
+
+  sub end : Private {} # No views needed in this controller
+
+  1;
+
+Now that shoud do what we want as was asked in the mailing list post. So we
+have some Gzipped content available in memory as a scalar, if the user agent
+requesting accepts gzipped content in the content encoding we can just serve
+that content. Otherwise we get a handle to that content that will uncompress
+on "read", determine the uncompressed length of the content and set the
+length in the headers. This satisfies the condition so that L<Catalyst> can
+skip trying to work out the size itself.
+
+=head1 The Trouble with Tribbles
+
+There is one problem with our solution of course. While this will work with
+relatively small content in the compressed scalar, anything of a reasonable
+size will fail to return a value for ISIZE in the call to getHeaderInfo().
+
+Why? Well it's all part of L<IO::Uncopress:Gunzip> magic. But in brief the
+only way we can guarantee that the full headers will be returned is that the
+compressed handle is read out completely as in:
+
+  while (1) {
+    my $len = $body->read( my $buf );
+    last if !defined $len;
+  }
+
+  my $size = $body->getHeaderInfo->{ISIZE};
+
+This is not desirable as we are handing off the calls to read to L<Catalyst>
+in processing the response. It is also not possible in the implementation to
+rewind an L<IO::Uncompress::Gunzip> object, so to get the begining of the
+handle again we would have to re-initialize or work with a clone.
+
+So implementing some of the magic to get the uncompressed length ourselves 
+is required lets's change some of the code in our controller:
+
+  # Unpack the last 4 bytes of the compressed data
+  my $io = IO::Scalar->new( \$comp );
+  $io->seek( -4, 2 );
+  $io->read( my $buf, 4);
+  $io->close();
+  my $size = unpack( 'V', $buf );
+
+  # Explicitly setting the size
+  $c->res->content_length( $size );
+
+
+This comes from a bit of reading that says the ISIZE value is contained in 
+the trailing 4 bytes of the gzipped content. So with the help of L<IO::Scalar>
+we take our original scalar containg the gzipped content, seek to last 4 bytes
+from the end of the content (now a L<IO::Handle>) and read them out. The call
+to unpack returns an integer that has the uncompressed size.
+
+There is much discussion on how to determine the uncompressed size, but in
+short we are dealing with a relatively small ( in memory ) amount of content
+so we are not going to bother with dealing with content over 4GB. This should
+do.
+
+=head1 Putting it all together, Cleanly
+
+While this works for an example, what we really want is to make this work in
+a real application. Also while I have stated that in cases like this it is
+best to set the content length in the response yourself, it does create a lot
+of unnecessary noise in the controller which should just be getting the 
+content and serving it. So now it's time to clean thing up more suitable to
+a solution. Consider the following lines in the L<Catalyst> code:
+
+      my $size = -s $response->body;
+      if ( $size ) {
+        $response->content_length( $size );
+      }
+
+While our previous efforts have been aimed at trying not to get here, it is
+a fair solution to just let it happen. Our current problem is an object
+produced from L<IO::Uncompress::Gunzip> will not correctly respond to the
+filetest operator used to determine the size. So what we need to do is make it
+work that way.
+
+How? We need a subclass of L<IO::Compress::Gunzip> where can overload the
+response to the filetest -s to do what we want. Well actually as subclassing
+is probably not what you really want in most cases we are just going to do
+a Moose delegation trick instead, which should work for us.
+
+  package MyApp::FunnyIO::Domain::FunnyIO;
+  use Moose;
+  use IO::Uncompress::Gunzip;
+  use IO::Scalar;
+  use namespace::sweep;
+
+  use overload
+    '-X' => \%myFileTest;
+
+  has '_gunzip' => (
+    is        => 'bare',
+    isa       => 'IO::Uncompress::Gunzip',
+    handles   => [qw/read getline close/]
+  );
+
+  has '_content' => ( is => 'ro' );
+
+
+
+What we have at this point is a new class that is going to use some helpers
+and wraps the important functions of L<IO:Uncompress::Gunzip> so we can work
+with the handle later. Using Moose delegation via 'handles' we expose the
+required methods from the underlying L<IO::Uncompress::Gunzip> object we
+create so they appear native to the interface of this class. In this case
+'_gunzip' is 'bare' because we won't actually need this accessor by itself,
+just the delegated methods.
+
+Use of L<overload> uses the '-X' hook. This is a special hook into all of the
+filetest operators. So when a filetest is performed on our created object
+we will delegate to our method to determine the size.
+
+As a final note there is the usage of L<namespace::sweep> which is a special
+version of L<namespace::autoclean>. The main reason for using this instead
+of L<namespace::autoclean> is that the later does not play well with
+L<overload> and will clean it up as an imported method.
+Using L<namespace::sweep> we avoid the problem an keep the overload while
+cleaning up anything else that was imported. Now for the meat of the code.
+
+  sub myFileTest {
+    my ( $self, $arg ) = @_;
+
+    if ( $arg eq "s" ) {
+
+      my $io = IO::Scalar->new( $self->_content );
+      $io->seek( -4, 2 );
+      $io->read( my $buf, 4 );
+      return unpack( 'V', $buf );
+
+    } else {
+      die "Only implementing a size operator at this time";
+    }
+
+  }
+
+So as we can see here our method that will be called takes an argument $arg.
+This will be passed in via the '-X' overload as the actual "letter" used
+in the filetest operator. In this case we only look for an invocation of "-s"
+as that will indicate the test for size. The inner work does what we did
+before. And now for a sensible contructor:
+
+  around BUILDARGS => sub {
+    my ( $orig, $class, $ref ) = @_;
+
+    return $class->$orig({
+      '_gunzip'   => IO::Compress::Gunzip->new( $ref ),
+      '_content'  => $ref
+    });
+  };
+
+  no Moose;
+  __PACKAGE__->meta->make_immutable;
+  1;
+
+This allows us to set up the constructor to behave more like the underlying
+L<IO::Uncompress::Gunzip> object with a single scalar ref as it's input
+argument. The L<Moose> magic uses the special $class and $orig to initialize
+the object with a more Mooselike constructor, filling our accessors with
+the L<IO::Uncompress::Gunzip> obect and the compressed content respectively.
+
+
+  my $z = MyApp::FunnyIO::Domain::FunnyIO->new( \$comp );
+  my $size = -s $z;
+  print $z->getline();
+
+That code would should that we can use our class in place of 
+L<IO::Uncompress::Gunzip> and get a result we want for the $size. Also our
+exposed L<IO::Handle> type methods work as expected and return the uncompressed
+content.
+
+We probably want another component to get the content, so we'll do something
+quick like this:
+
+  package MyApp::FunnyIO::Domain::GzipData;
+  use Moose;
+  use MooseX::Singleton;
+  use IO::Compress::Gzip qw/gzip $GzipError/;
+  use Path::Class::File;
+  use File::Slurp;
+  use namespace::sweep;
+
+  has content => ( is => 'ro', isa => 'Str', lazy_build => 1 );
+
+  has gzipped => ( is => 'ro', reader => 'getData', lazy_build => 1 );
+
+  sub _build_content {
+    return read_file Path::Class::File->new( 'data', 'product.json' );
+  }
+
+  sub _build_gzipped {
+    my $self = shift;
+
+    my $comp;
+    gzip( $self->content, \$comp ) || die $GzipError;
+    return \$comp;
+  }
+
+  no Moose;
+  __PACKAGE__->meta->make_immutable;
+  1;
+
+
+This is a trivial source that will take either some plain scalar content or
+already gzipped content and allow us to get the data back. At the very least,
+for brevity a call to getData on an object with no arguments provided in the
+constructor will read in a file and compress it's contents before returning it.
+
+These components are as yet just plain classes outside of the L<Catalyst>
+context. We could just use the classes in our controller code but it is going
+to be cleaner and more extensible to implement these as L<Catalyst> models.
+So two trivial model classes:
+
+  package MyApp::FunnyIO::Web::Model::FunnyIO;
+  use base 'Catalyst::Model::Factory';
+
+  __PACKAGE__->config( class => 'MyApp::FunnyIO::Domain::FunnyIO' );
+
+  sub mangle_arguments {
+    my ( $self, $args ) = @_;
+    return $args->{data};
+  }
+
+  1;
+
+  package MyApp::FunnyIO::Web::Model::GzipData;
+  use base 'Catalyst::Model::Adaptor';
+  __PACKAGE__->config( class => 'MyApp::FunnyIO::Domain::GzipData' );
+  1;
+
+Okay. So now we can just call the model components rather than hard code and 
+import classes into our controller logic. The classes can also be overridden
+in config which is useful as well.
+
+In any case we can now implement our controller code like this:
+
+
+  package MyApp::FunnyIO::Web::Controller::FunnyIO;
+  use Moose;
+  use namespace::autoclean;
+
+  BEGIN { extends 'Catalyst::Controller'; }
+
+  sub index :Path :GET :Args(0) {
+    my ( $self, $c ) = @_;
+
+    my ( $body, $comp );
+
+    $comp = $c->model('GzipData')->getData();
+
+    $c->res->content_type('text/plain');
+
+    if ( $c->req->header('accept_encoding') =~ /gzip/ ) {
+      $c->res->content_encoding('gzip');
+      $body = $comp;
+    } else {
+      $body = $c->model('FunnyIO', data => $comp);
+    }
+
+    $c->res->body( $body );
+
+  }
+
+  sub end : Private {} # No views in this controller;
+
+  __PACKAGE__->meta->make_immutable;
+  
+  1;
+
+This gives us much cleaner and clearer approach by moving any working logic
+out of the controller and allowing the controller to fetch and negotiate how
+content is served. So basically, get some compressed data from the model, if
+the agent can accept gzip encoding then set the body as is, otherwise set the
+body to the uncompressor handle obtained from model.
+
+The resulting call where L<Catalyst> will set the content_length in the headers
+will correctly call our overloaded method returning the correct uncompressed
+size.
+
+Just as another exercise, we can see the original warnings produced by 
+overriding the default class of the model so that we are using 
+L<IO::Uncompress::Gunzip> instead. So in our application config file:
+
+  ---
+  Model::FunnyIO:
+    class: IO::Uncompress::Gunzip
+
+This should show the warning from the filetest operator and the L<Catalyst>
+produced warning that content_length has not been set
+
