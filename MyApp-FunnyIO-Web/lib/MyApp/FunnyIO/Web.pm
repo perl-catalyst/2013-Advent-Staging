@@ -27,6 +27,7 @@ extends 'Catalyst';
 our $VERSION = '0.01';
 
 use MyApp::FunnyIO::Config;
+use AnyEvent;
 
 # Configure the application.
 #

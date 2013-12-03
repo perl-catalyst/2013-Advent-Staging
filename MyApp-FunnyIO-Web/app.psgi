@@ -9,10 +9,10 @@ use Plack::Builder;
 
 builder {
 
-  my $app = MyApp::FunnyIO::Web;
+  my $app = MyApp::FunnyIO::Web->new;
 
-  my $app->log(
-    Log::Log4perl::Catalyst-new(
+  $app->log(
+    Log::Log4perl::Catalyst->new(
       $app->config->{log}, autoflush => 1
     )
   );

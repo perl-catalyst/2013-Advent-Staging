@@ -35,13 +35,14 @@ sub index :Path :Args(0) {
 
   $c->res->content_type('text/plain');
 
-  if ( $c->req->header('accept_encoding') =~ /gzip/ ) {
+  if ( defined ($c->req->header('accept-encoding')) && 
+      ($c->req->header('accept-encoding') =~ /gzip/ )) {
     $c->log->debug( 'Sending Compressed' );
     $c->res->content_encoding('gzip');
     $body = $comp;
   } else {
     $c->log->debug( 'Sending Uncompressed' );
-    $body = IO::Uncompress::Guzip->new( \$comp );
+    $body = IO::Uncompress::Gunzip->new( \$comp );
     #my $length = $body->getHeaderInfo->{ISIZE}; # Hmmn, may not work
     
     # Unpack the last 4 bytes of the compressed data

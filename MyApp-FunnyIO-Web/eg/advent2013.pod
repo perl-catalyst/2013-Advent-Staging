@@ -141,7 +141,8 @@ length so we should be okay with something like this for a controller:
 
     $c->res->content_type('text/plain');
 
-    if ( $c->req->header('accept_encoding') =~ /gzip/ ) {
+    if ( defined ($c->req->header('accept-encoding')) &&
+        ($c->req->header('accept_encoding') =~ /gzip/ )) {
       $c->log->debug( 'Sending Compressed' );
       $c->res->content_encoding( 'gzip' );
       $body = $comp;
@@ -235,36 +236,24 @@ filetest operator used to determine the size. So what we need to do is make it
 work that way.
 
 How? We need a subclass of L<IO::Compress::Gunzip> where can overload the
-response to the filetest -s to do what we want. Well actually as subclassing
-is probably not what you really want in most cases we are just going to do
-a Moose delegation trick instead, which should work for us.
+response to the filetest -s to do what we want. 
 
   package MyApp::FunnyIO::Domain::FunnyIO;
   use Moose;
-  use IO::Uncompress::Gunzip;
+  use MooseX::NonMoose::InsideOut;
+  extends 'IO::Uncompress::Gunzip';
   use IO::Scalar;
   use namespace::sweep;
 
   use overload
     '-X' => \%myFileTest;
 
-  has '_gunzip' => (
-    is        => 'bare',
-    isa       => 'IO::Uncompress::Gunzip',
-    handles   => [qw/read getline close/]
-  );
-
   has '_content' => ( is => 'ro' );
 
-
-
-What we have at this point is a new class that is going to use some helpers
-and wraps the important functions of L<IO:Uncompress::Gunzip> so we can work
-with the handle later. Using Moose delegation via 'handles' we expose the
-required methods from the underlying L<IO::Uncompress::Gunzip> object we
-create so they appear native to the interface of this class. In this case
-'_gunzip' is 'bare' because we won't actually need this accessor by itself,
-just the delegated methods.
+We are using L<MooseX::NonMoose::InsideOut> in order to wrap a tricky non
+Moose class. We want some Moose niceties while still holding on to the 
+behavior of L<IO::Uncompress::Gunzip> which will act at all points like a
+handle.
 
 Use of L<overload> uses the '-X' hook. This is a special hook into all of the
 filetest operators. So when a filetest is performed on our created object
@@ -301,12 +290,13 @@ before. And now for a sensible contructor:
 
   around BUILDARGS => sub {
     my ( $orig, $class, $ref ) = @_;
-
-    return $class->$orig({
-      '_gunzip'   => IO::Compress::Gunzip->new( $ref ),
-      '_content'  => $ref
-    });
+    return $class->$orig({ '_content'  => $ref });
   };
+
+  sub FOREIGNBUILDARGS {
+    my ( $class, $args ) = @_:
+    return $args;
+  }
 
   no Moose;
   __PACKAGE__->meta->make_immutable;
@@ -315,8 +305,11 @@ before. And now for a sensible contructor:
 This allows us to set up the constructor to behave more like the underlying
 L<IO::Uncompress::Gunzip> object with a single scalar ref as it's input
 argument. The L<Moose> magic uses the special $class and $orig to initialize
-the object with a more Mooselike constructor, filling our accessors with
-the L<IO::Uncompress::Gunzip> obect and the compressed content respectively.
+the object with a more Mooselike constructor, and we keep a copy of the
+original scalar refernce we are passing in so we can get the size information.
+Also there is the hook for FORIEGNBUILDARGS which is called by 
+L<MooseX::NonMoose::InsideOut>. This is simply used to pass in the correct
+arguments to the constructor of the class we are extending
 
 
   my $z = MyApp::FunnyIO::Domain::FunnyIO->new( \$comp );
@@ -336,7 +329,6 @@ quick like this:
   use MooseX::Singleton;
   use IO::Compress::Gzip qw/gzip $GzipError/;
   use Path::Class::File;
-  use File::Slurp;
   use namespace::sweep;
 
   has content => ( is => 'ro', isa => 'Str', lazy_build => 1 );
@@ -344,15 +336,15 @@ quick like this:
   has gzipped => ( is => 'ro', reader => 'getData', lazy_build => 1 );
 
   sub _build_content {
-    return read_file Path::Class::File->new( 'data', 'product.json' );
+    return Path::Class::File->new( 'data', 'product.json' )->slurp;
   }
 
   sub _build_gzipped {
     my $self = shift;
 
     my $comp;
-    gzip( $self->content, \$comp ) || die $GzipError;
-    return \$comp;
+    gzip( \$self->content, \$comp ) || die $GzipError;
+    return $comp;
   }
 
   no Moose;
@@ -409,11 +401,12 @@ In any case we can now implement our controller code like this:
 
     $c->res->content_type('text/plain');
 
-    if ( $c->req->header('accept_encoding') =~ /gzip/ ) {
+    if ( defined($c->req->header('accept-encoding')) && 
+        ($c->req->header('accept_encoding') =~ /gzip/ )) {
       $c->res->content_encoding('gzip');
       $body = $comp;
     } else {
-      $body = $c->model('FunnyIO', data => $comp);
+      $body = $c->model('FunnyIO', data => \$comp);
     }
 
     $c->res->body( $body );
@@ -434,11 +427,31 @@ body to the uncompressor handle obtained from model.
 
 The resulting call where L<Catalyst> will set the content_length in the headers
 will correctly call our overloaded method returning the correct uncompressed
-size.
+size. Trying it out with curl:
+
+  $ curl -I --header 'accept-encoding: gzip' http://localhost:5000/funnyio
+  HTTP/1.1 200 OK
+  Content-Encoding: gzip
+  Content-Length: 766
+  Content-Type: text/plain
+  X-Catalyst: 5.90051
+  Date: Tue, 03 Dec 2013 10:50:02 GMT
+  Connection: keep-alive
+
+  $ curl -I http://localhost:5000/funnyio
+  HTTP/1.1 200 OK
+  Content-Length: 5877
+  Content-Type: text/plain
+  X-Catalyst: 5.90051
+  Date: Tue, 03 Dec 2013 10:50:56 GMT
+  Connection: keep-alive
+
 
 Just as another exercise, we can see the original warnings produced by 
 overriding the default class of the model so that we are using 
-L<IO::Uncompress::Gunzip> instead. So in our application config file:
+L<IO::Uncompress::Gunzip> instead. We can do this as we kept the same basic
+interface in our class, making them interchangeable. 
+So in our application config file:
 
   ---
   Model::FunnyIO:
@@ -447,3 +460,8 @@ L<IO::Uncompress::Gunzip> instead. So in our application config file:
 This should show the warning from the filetest operator and the L<Catalyst>
 produced warning that content_length has not been set
 
+  -s on unopened filehandle
+
+=head1 SUMMARY
+
+=head1 AUTHOR

@@ -1,17 +1,13 @@
 package MyApp::FunnyIO::Domain::FunnyIO;
 use Moose;
-use IO::Uncompress::Gunzip;
+use MooseX::NonMoose::InsideOut;
+extends 'IO::Uncompress::Gunzip';
 use IO::Scalar;
 use namespace::sweep;
 
 use overload
-  '-X'  => \&myFileTest;
-
-has '_gunzip' => (
-  is        => 'bare',
-  isa       => 'IO::Uncompress::Gunzip',
-  handles   => [qw/read getline close/]
-);
+  'bool'  => sub {1},
+  '-X'    => \&myFileTest;
 
 has '_content' => ( is => 'ro' );
 
@@ -33,12 +29,14 @@ sub myFileTest {
 
 around BUILDARGS => sub {
   my ( $orig, $class, $ref ) = @_;
-
-  return $class->$orig({
-    '_gunzip'   => IO::Uncompress::Gunzip->new( $ref ),
-    '_content'  => $ref
-  });
+  return $class->$orig({ '_content' => $ref });
 };
+
+
+sub FOREIGNBUILDARGS {
+  my ( $class, $args ) = @_;
+  return $args;
+}
 
 no Moose;
 __PACKAGE__->meta->make_immutable;

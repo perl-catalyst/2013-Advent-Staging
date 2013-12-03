@@ -30,11 +30,14 @@ sub index :Path :Args(0) {
 
   $c->res->content_type('text/plain');
 
-  if ( $c->req->header('accept_encoding') =~ /gzip/ ) {
+  if ( defined($c->req->header('accept-encoding')) &&
+      ($c->req->header('accept-encoding') =~ /gzip/ )) {
+    $c->log->debug( 'Sending compressed' );
     $c->res->content_encoding('gzip');
     $body = $comp;
   } else {
-    $body = $c->model('FunnyIO', data => $comp);
+    $c->log->debug( 'Sending uncompressed' );
+    $body = $c->model('FunnyIO', data => \$comp);
   }
 
   $c->res->body( $body );
