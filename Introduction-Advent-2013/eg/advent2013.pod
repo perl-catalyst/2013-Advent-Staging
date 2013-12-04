@@ -1,0 +1,172 @@
+=head1 Title
+
+Perl Catalyst in 2013 - The Year in Review!
+
+=head1 Overview
+
+Introduction to Advent 2013 and a review of all the things we accomplished.
+
+=head1 Welcome to Perl Catalyst Advent 2013!
+
+Its that time once again where the Perl hackers and stakeholders of various
+projects come together to congratulates themselves a bit for all the time and
+effort spent over the past year.  So we review a bit, and we try to share our
+knowledge with people that are seeking to learn it.  And we have a bit of fun
+at the same time!
+
+We need to remember that this is a time of year which is traditionally associated
+with giving gifts and receiving them graciously.  But in a larger sense the gifts
+have already been sent along.  Because for those of us involved in Free / Open
+source software, every act of participation is a gift.  Whether you write code,
+fix documentation, submit test reports or just advocate on twitter, blogs, or
+whatever, you are gifting time and effort.  That's in my mind one of the top
+gifts a person can give, since our time is one of our most precious and limited
+resources.  To give that away is a pretty big deal in my book.  And for those
+who choose Free / Open source, well I think its very cool to be part of a
+ethical movement like this whose focus is the betterment of all by working in
+common for those things with are common to all.  Things like Perl, L<PSGI>,
+L<Moose> and of course lets not forget L<Catalyst>!
+
+So lets take a brief spin through the main events for L<Catalyst> in 2013!
+
+=head1 Main accomplishments
+
+Here's a brief rundown of some of the stuff that was added and changed in
+L<Catalyst> in 2013.  This is just the highlights, you should checkout
+the Changes file for more details:
+
+L<https://metacpan.org/source/JJNAPIORK/Catalyst-Runtime-5.90051/Changes>
+
+=over 4
+
+=item HTTP Method Matching
+
+We added new action attributes that let you constrain on the expected HTTP
+method.  For example:
+
+    sub start : ChainedParent
+      PathPrefix CaptureArgs(0) { }
+
+      sub list_users : Chained('start')
+       GET PathPart('') Args(0) { }
+
+      sub add_users : Chained('start')
+       POST PathPart('') Args(0) { }
+
+See L<Catalyst::Controller/GET> for more.
+
+=item Unicode in Core
+
+Just turn on the switch and you'll be sure to have greatly improved ability to
+handle utf8 encoding.
+
+    $c->config->{encoding} = 'UTF-8'
+
+=item Handle the PSGI writer object for more control on output
+
+Useful for streaming and working with event loops, or just for when you want
+more control on how content is returned.
+
+=item Support for accessing IO streams when allowed.
+
+Use this for when you want to do websockets or long polling.
+
+=item Support PSGI middleware in configuration
+
+Lets you declare middleware as part of your L<Catalyst> application
+
+=item Added 'global data handlers' for parsing request content
+
+Lets you handle more than classic form POST parameters.  Yes, this mean
+L<Catalyst> now handlers JSON POST out of the box!
+
+=item Mount a PSGI response
+
+Now your actions can mount PSGI applications and return PSGI reponses
+directly.  Great for when you want to graft into you L<Catalyst> application
+bits of other frameworks such as L<Web::Simple> or L<Web::Machine> (or even
+other L<Catalyst> applications.)
+
+=item Constrain Actions on HTTP Request Content-Type
+
+Lets you constrain an action to a particular HTTP request content type.  This
+lets you have one action that handles form data and another that handles JSON.
+Useful for building web APIs and is a nice augmentation of what you get with
+L<Catalyst::Action::REST>
+
+=item Configuration flag to use Hash::MultiValue for Request Parameters
+
+Lets you use L<Hash::MultiValue> for query and body parameters, which can solve
+some situtations when you are not sure if incoming parameters are scalar or 
+arrays.  Very commonly used on other L<Plack> based systems.
+
+=back
+
+And there was a lot of under the hood stuff as well.  We cleared out that nasty
+Regexp based dispatch stuff into its own repo (makes it easier to remove later on).
+We did a bunch of stuff to make sure we'd play nice with other Plack applications
+that L<Catalyst> might dispatch to (such as making sure input is properly
+buffered).  Ether (who works with me at Campus Explorer) dug in deep and cleaned
+up some old and no longer good practice Moosisms (replacing them with new, shiny
+Moosey goodness). And quite a few people checked in docs and other improvements.
+
+Here's a nice chart of people that checked in code to the L<Catalyst> repo:
+
+L<https://github.com/perl-catalyst/catalyst-runtime/graphs/contributors?from=2013-01-01&to=2013-11-16&type=c>
+
+And that doesn't count people that checked in code to other important bits of
+the ecosystem.  Lots of people contributed doc patches and fixes to stuff around
+the session and authentication as well.  So '++' to all of you!
+
+Excited to learn more?  Well, go check out the docs, ponder test cases and look
+forward to more upcoming advent articles where we hope to cover all this and
+more!
+
+=head1 Project management
+
+In order to facilitate more participation, we mirrored the main L<Catalyst> git
+repository over on Github (see:  L<https://github.com/perl-catalyst/>).  This
+repository mirrors the canonical repository which for the time being will remain
+on shadowgit (L<catagits@git.shadowcat.co.uk:Catalyst-Runtime.git>).  And we
+setup TravisCI on the github repo in order to help us track problems with
+changes (thanks Chris Weyl L<https://metacpan.org/author/RSRCHBOY> for the help
+with that).
+
+In addition we setup a Questhub for helping us to track and discuss possible
+changes to L<Catalyst> (See L<http://questhub.io/realm/perl/explore/latest/tag/catalyst>)
+
+I've also tried to blog as much as possible, and be sure to announce the
+important bits on the mailing list and in many cases I've tried to make use of
+external sites like Reddit and social media.
+
+Lastly we tried to be a little more transparent regarding what we are targeting
+for L<Catalyst> changes.  We had several named development cycles ( Zombie-boomstick,
+Sicilian-buttercup and Hamburg) which all had targeted goals, announcements,
+as much discussion as I could squeeze out of the community and retrospectives.
+
+I personally believe that open source works best when it works for all of us
+and the best way I can think to do that is to try and make everything as
+transparent as possible.  I believe we succeeded in that, and I hope we can
+build on that into the coming year.
+
+=head1 Summary
+
+2013 was another big year for L<Catalyst>.  We worked hard at making it even
+more flexible and useful out of the box by exposing more L<PSGI> and grafting
+in a few missing bits.  I expect 2014 to be even a bigger year as we look hard
+at L<Catalyst> and try to find a strong direction that lets it remain the best
+full stack web application framework for Perl!
+
+=head1 For More Information
+
+CPAN: L<Catalyst>
+Github: L<https://github.com/perl-catalyst/>
+Code Repository: L<catagits@git.shadowcat.co.uk:Catalyst-Runtime.git>
+Questhub: L<http://questhub.io/realm/perl/explore/latest/tag/catalyst>
+Mailing List Info: L<http://lists.scsys.co.uk/cgi-bin/mailman/listinfo/catalyst>
+
+=head1 Author
+
+Your Name <your@email.com> | IRC nick
+
+=cut

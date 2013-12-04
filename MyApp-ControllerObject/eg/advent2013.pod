@@ -1,0 +1,278 @@
+=head1 Title
+
+Roll your own Catalyst Controller with Mooselike imports
+
+=head1 Overview
+
+Learn how to create a custom Catalyst base controller with Mooselike
+imported keywords and more.
+
+=head1 Introduction
+
+Most L<Catalyst> applications of a certain age and complexity have a lot of
+controllers.  Quite often your controllers have excessive boilerplate code
+even before you add anything related to your business logic.  Here's the
+canonical controller as often documented.
+
+    package MyApp::Controller::MyController;
+
+    use Moose;
+    use namespace::autoclean;
+ 
+    BEGIN { extends 'Catalyst::Controller' }
+
+    ## -- Your code
+
+    __PACKAGE__->meta->make_immutable
+
+I've always disliked how the C<extends> needs to be in a BEGIN block, which is
+a side effect of how L<MooseX::MethodAttributes> works with the existing code
+base as ported to L<Moose> several years ago.   It just looks odd and is a
+surprise to people new (and even old) to the framework.  People generally just
+cargo cult it.
+
+Additionally every action typically starts by shifting or slurping the same
+arguments:
+
+    sub my_action :Action {
+      my ($self, $c) = @_'
+    }
+
+And that's before you add in any of a number of things special to your logic.
+Is there anything we can do to centralize some of this boilerplate?  And what
+if you like to use a handful of other syntax enhancing modules like
+L<Function::Parameters> or L<CatalystX::Syntax::Action>? If you wanted that,
+you'd end up with a controller something like:
+
+    package MyApp::Controller;
+
+    use Moose;
+    BEGIN { extends 'Catalyst::Controller' }
+
+    use Function::Parameters;
+    use CatalystX::Syntax::Action;
+    use namespace::autoclean;
+
+    ## -- You custom actions and methods
+
+    __PACKAGE__->meta->make_immutable;
+
+And doing this allows you to write a controller like this:
+
+    package MyApp::Controller::Root;
+
+    use Moose;
+    BEGIN { extends 'Catalyst::Controller' }
+
+    use Function::Parameters;
+    use CatalystX::Syntax::Action;
+    use namespace::autoclean;
+
+    has 'test_attribute' => (
+      is=>'ro',
+      default=>'example value');
+
+    method generate_helloworld { 'Hello world!' }
+
+    action helloworld : GET Path('/helloworld') {
+      $ctx->res->body( $self->generate_helloworld);
+    }
+
+    action echo($arg) : GET Path('/echo') Args(1) {
+      $ctx->res->body( $arg );
+    }
+
+    1;
+
+=head1 Moose and Import::Into to the Rescue!
+
+Our goal is to take the controller example from above and reduce it so that
+you can just do:
+
+    package MyApp::Controller;
+
+    use MyApp::ControllerObject;
+
+    ## -- You custom actions and methods
+
+    __PACKAGE__->meta->make_immutable;
+
+This yields an example controller like so:
+
+    package MyApp::Controller::Root;
+
+    use MyApp::ControllerObject;
+
+    has 'test_attribute' => (
+      is=>'ro',
+      default=>'example value');
+
+    method generate_helloworld { 'Hello world!' }
+
+    action helloworld : GET Path('/helloworld') {
+      $ctx->res->body( $self->generate_helloworld);
+    }
+
+    action echo($arg) : GET Path('/echo') Args(1) {
+      $ctx->res->body( $arg );
+    }
+
+L<Catalyst> is build on L<Moose> so out of the box you get some built in
+features that allow you to create a custom Controller object class that slurps
+up everything you get with L<Moose> and allows you to add in whatever it is you
+like.  along with L<Import::Into>'s consistent interface for importing features
+into your package, its very trivial to make a custom controller that does all
+we want (and can easily be extended to do much more, if you think that is wise).
+
+So, what would C<MyApp::ControllerObject> look like?  Lets take a look a the
+full code and then do a walkdown:
+
+    package MyApp::ControllerObject;
+
+    use strict;
+    use warnings;
+
+    use Moose::Exporter;
+    use Import::Into;
+    use Module::Runtime;
+
+    my ($import, $unimport, $init_meta) =
+      Moose::Exporter->build_import_methods( also => ['Moose'] );
+
+    sub importables {
+      'Function::Parameters',
+      'CatalystX::Syntax::Action',
+      'namespace::autoclean',
+    }
+
+    sub base_class { 'Catalyst::Controller' }
+
+    sub init_meta {
+      my ($class, @args) = @_;
+      Moose->init_meta( @args,
+        base_class => $class->base_class );
+      goto $init_meta if $init_meta;
+    }
+
+    sub import {
+      use_module($_)->import::into(scalar caller)
+        for shift->importables;
+      goto $import;
+    }
+
+    1;
+
+So you can see there's not a lot of needed code to do this, mostly because of
+all the existing art that the L<Moose> cabal put into making extending L<Moose>
+easy, and because of the wonder clean, consistent API that L<Import::Into>
+gives you.  Let's take it again from the top:
+
+    package MyApp::ControllerObject;
+
+    use strict;
+    use warnings;
+
+    use Moose::Exporter;
+    use Import::Into;
+    use Module::Runtime;
+
+So we setup the module namespace and use three modules (plus the ever present
+L<strict> and L<warnings> pragmas) which brings in all the required functionality.
+L<Moose::Exporter> sets us up with a Moosey import and later on you will see
+it lets us import all the normal Moose goodies.  L<Import::Info> provides a clean,
+consistent interface for importing a module features into a package other than
+your own (used to inject syntax and pragmas into a calling system).  Lastly, we
+use L<Module::Runtime> to make it easy to dynamically load modules in running
+code.
+
+   my ($import, $unimport, $init_meta) =
+      Moose::Exporter->build_import_methods( also => ['Moose'] );
+
+Here we use L<Moose::Exporter> to build for use some coderefs to handle how to
+properly import and initialize L<Moose>
+
+    sub importables {
+      'Function::Parameters',
+      'CatalystX::Syntax::Action',
+      'namespace::autoclean',
+    }
+
+    sub base_class { 'Catalyst::Controller' }
+
+Here's the features we want imported into our controllers, and the base controller
+we want to use.  I wrote it out as a separate function to make it easy for you to
+use and for people to subclass and override.  You can add here whatever you want
+(but I recommend sanity, and remember too much magic can make it hard to debug
+stuff down the road).
+
+    sub init_meta {
+      my ($class, @args) = @_;
+      Moose->init_meta( @args,
+        base_class => $class->base_class );
+      goto $init_meta if $init_meta;
+    }
+
+This method gets called at startup and it initializes L<Moose> and sets the actual
+base class.  This way when you do C<use MyApp::ControllerObject> you are already
+inheriting from L<Catalyst::Controller>.
+
+    sub import {
+      use_module($_)->import::into(scalar caller)
+        for shift->importables;
+      goto $import;
+    }
+
+Here's where the bulk of the action is.  AS you should recall, when you write
+code like:
+
+    use MyApp::ControllerObject;
+
+That loads the code representing that namespace, and then calls the C<import>
+method on it.  So we loop through each module we want to import, make sure it
+is loaded via C<use_module> and then use the interface that L<Import::Into>
+gives us.  After that, we forward on to the C<import> coderef that 
+L<Moose::Exporter> setup for us early on.
+
+Oh, what's up with that C<goto>?  Yeah, generally C<goto> is evil, but this is
+a secondary use of C<goto> which is a lot like a subroutine call, but it acts more
+like a subroutine swap (nothing is added to the callstack, and @_ is preserved).
+So its nothing to worry about!
+
+And that is it!
+See the code on Github for a full example distribution you can review:
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/MyApp-ControllerObject>
+
+This has a full sample distribution with test cases and all that.  So take a
+look to see the bigger picture.
+
+=head1 Summary
+
+We reviewed one approach to using built in features of L<Moose>, the object
+system upon which L<Catalyst> is built, to reduce boilerplate when several
+desired features are needed across a large project.  Along with L<Import::Into>'s
+simple and consistent API, you now have all you need to reduce boilerplate
+code in your larger Perl L<Catalyst> projects!
+
+=head1 Limitations and Concerns
+
+Although this method does allow one to centralize some boilerplate, I highly
+recommend being careful with the amount of extra behavior you place in this
+common class, as excessive magic can ultimately cause confusion and make it
+harder to debug issue.  This method is not intended as a replacement for
+proper use of standard Perl design (Roles, etc).
+
+=head1 More Information
+
+I recommend reading the excellent documentation for extending L<Moose> via
+its build in exporter, L<Moose::Exporter> as well as any of the related
+documentation in the L<Moose> distribution, as well as the following:
+
+L<Catalyst>, L<Moose>, L<Import::Into>, L<Function::Parameters>,
+L<namespace::autoclean>, L<CatalystX::Syntax::Action>
+
+=head1 Author
+
+John Napiorkowski L<email:jjnapiork@cpan.org>
+
+=cut
+

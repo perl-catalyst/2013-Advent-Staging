@@ -1,0 +1,130 @@
+=head1 Title
+
+Using Body Data Handlers in Catalyst 
+
+=head1 Overview
+
+The v5.90050 Release of Catalyst introduced a new way to process request body
+content.  Out of the box L<Catalyst> now offers basic support for request
+content types of JSON and some of the more common approaches to nesting data
+structures in HTML form parameters.  You can modify how this works globally
+by adding support for additional types or overriding default types.
+
+=head1 Introduction
+
+L<Catalyst> has supported classic HTML Form type POST parameters, as well
+as GET request query parameters for a long time.  Although the built in support
+has a few gotchas (many of which we fixed by allowing you to configure
+L<Hash::MultiValue> as field storage for request parameters) it has generally
+served well.
+
+However times have changed quite a bit since L<Catalyst> was first put on CPAN.
+Common alternatives for client - server communication, typically using JSON,
+are the order of the day, and its normal for a web framework to support at
+least that out of the box.  L<Catalyst> has long met this need via the external
+framework L<Catalyst::Action::REST> which is a toolkit for parsing and rendering
+various types of content.  However L<Catalyst::Action::REST> can quite often be
+a lot more than you need.  If you are just trying to support AJAXy style HTML
+form submission and validation, you probably don't want all the extra bits and
+structure that L<Catalyst::Action::REST> gives you.  So,  starting in version
+5.90050, L<Catalyst> has a new system for parsing common incoming request
+bodies, which out of the box will support JSON as well as the more common
+idioms for nested form parameters.  We'll take a look out how this works for
+JSON request bodies and how you can modify and augment this new 'body data'
+system
+
+=head1 How Does it Work?
+
+There's two parts to the system.  The first is part of L<Catalyst> application
+class, and takes the form of a new configuration option and key C<data_handlers>.
+It works like this:
+
+    package MyApp;
+
+    use Catalyst;
+
+    __PACKAGE__->config(
+      data_handlers => {
+        'application/json' => sub {
+          # $_ is localized to a readable filehandle of the request body content.
+        },
+      },
+    );
+
+Basically L<Catalyst> defines a new global configuration option C<data_handlers>
+which is a hashref where the key is a standard MIME content-type and the value
+is a subroutine reference that is intended to parse that content type.
+
+The subroutine reference has C<$_> localized to the filehandle of the request
+body content, so you can read the content any way you like (you can use non
+blocking techniques should an event loop exist although it is doubtful that
+will help much since the filehandle has already been fully buffered).
+
+There is no defined return type.  You can return a parsed data as a hashref
+or return an object, whatever makes sense for the content type and the size
+you are dealing with.  For example, here's the code for the built in JSON
+parsing:
+
+    'application/json' => sub {
+      Class::Load::load_first_existing_class('JSON::MaybeXS', 'JSON')
+        ->can('decode_json')->(do { local $/; $_->getline });
+    },
+
+Basically we just slurp up the JSON in one big line and parse it all in one
+go.  Please note this might not be the best approach if the incoming JSON
+is expected to be very large!
+
+Your hashref under C<data_handlers> can include as many types as you deem
+required, and you can override the build in JSON parsing since we apply
+you customizations ontop of the defaults.
+
+So, how do you access this new parsed content?  We've added a new attributes
+to L<Catalyst::Request> called C<body_data>.  This attribute is lazy, so
+unless you actually ask for it, we don't attempt to parse any request content
+against the defined L<data_handlers>.  So if you wrote a ton of your own
+JSON decoding stuff, and/or are using L<Catalyst::Action::REST> you can
+keep on doing that without any impact at all on your request overhead.
+
+Here's how this could look in you controller.  Lets assume the incoming is
+C<application/json> like "{'name':'Jason','age':'25'}":
+
+    sub update_user : POST Path(/User) Consumes(JSON) {
+      my $p = (my $c = pop)->req->body_data;
+      $c->res->body("My name is $posted->{name} and my age is $p->{age}");
+    }
+
+Basically this is very similar to the request object's C<body_parameters>
+method but is data focused on alternative POSTed or PUT request content.
+
+The built in JSON decoder just returns a hashref, which is similar to many
+other frameworks but there's nothing stopping you from returning any type
+of scalar reference, including an object.
+
+So that's really it!
+
+=head1 Caveats, gotchas...
+
+Although unicode is supported out of the box with L<Catalyst> information
+in the C<$_> localized filehandle is basically just as it comes from the
+client.  You may need to do additional decoding.  This might change in 
+the future, but in the absence of clear requirements the authors felt it best
+to not guess to far in advance.
+
+=head1 Summary
+
+Starting in version 5.90050, L<Catalyst> offers useful support for JSON
+POSTed content out of the box, reducing one's need to lean on heavier
+addins such as L<Catalyst::Action::REST> while maintaining our desire
+to keep L<Catalyst> modular and flexible.  
+
+=head1 For More Information
+
+Setting data handler configutation: L<Catalyst/DATA-HANDLERS>
+
+Accessing the parsed content: L<Catalyst::Request/req-body_data>
+
+=head1 Author
+
+John Napiorkowski L<email:jjnapiork@cpan.org>
+
+=cut

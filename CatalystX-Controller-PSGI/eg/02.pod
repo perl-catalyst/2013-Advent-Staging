@@ -1,0 +1,37 @@
+=head1 Title
+
+CataylstX::Controller::PSGI - Using Plack apps inside Catalyst Controllers - Part 2
+
+=head1 Overview
+
+In part 1 of this article, I covered the basics of wrapping a .psgi app inside
+Catalyst so we could work on adding new urls the Catalyst way, whilst still having
+our legacy app working as before.
+
+In this part I'll be covering converting parts of that legacy app into Cataylst
+Models, and passing them back to the legacy app at startup
+
+=head1 Prequisites
+
+Read L<Part 1|http://www.catalystframework.org/calendar/2013/16> first
+
+Note, I'll be using a copy of MyApp, called MyApp2, for the purpose of preserving
+the part 1 code.
+
+=head1 The Aim
+
+Expand our existing app so that it's more Catalyst than legacy app, we'll do this
+by replacing legacy.psgi with inline code, loading our legacy perl modules as
+Catalyst Models and using the ACCEPT_CONTEXT hook to pass them to the legacy app.
+
+=head1 The Code
+
+We'll start by inlining our legacy app.
+
+=head1 Summary
+
+=head1 Author
+
+Mark Ellis L<email:nobody@cpan.org>
+
+=cut

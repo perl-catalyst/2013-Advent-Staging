@@ -1,0 +1,178 @@
+=head1 Title
+
+Nonblocking and Streaming 
+
+=head1 Overview
+
+Modern versions of L<Catalyst> allow you to take charge of how your
+write operations work.  This enables better support for working inside
+common event loops such as L<AnyEvent> and <IO::Async> to support
+non blocking writes to stream large files.
+
+Lets explore how L<PSGI> implements delayed and streaming responses
+and how we can use streaming response with an event loop to enable
+use of nonblocking IO.  Then lets see how L<Catalyst> exposes that
+API.  This part two of a four part series.
+
+=head1 Introduction
+
+Previous We've seem how L<PSGI> does delayed and streaming responses.  Now lets
+translate that to how L<Catalyst> works.
+
+=head1 The Catalyst PSGI application
+
+So you've probably seen the following example of using L<Catalyst> as a L<PSGI>
+application:
+
+    use MyCatalystApp;
+    my $app = MyCatalystApp->psgi_app;
+
+And if that file is called C<mycatalystapp.psgi> you can run it under L<Starman>
+exactly like the simple examples above:
+
+    $ plackup -s Starman mycatalystapp.psgi
+
+But what is going on under the hood with L<Catalyst>?  What kind of L<PSGI>
+application is it?  As it turns out, the actual L<PSGI> coderef follows the
+delayed and streaming model that we discussed in length during the preceding
+article.  I really recommend that you see the full coder over here:
+
+L<https://metacpan.org/source/JJNAPIORK/Catalyst-Runtime-5.90051/lib/Catalyst/Engine.pm#L702>
+
+But here's a snip for discussion, which is from L<Catalyst::Engine>
+
+    sub build_psgi_app {
+        my ($self, $app) = @_;
+     
+        return sub {
+            my ($env) = @_;
+     
+            return sub {
+                my ($respond) = @_;
+                confess("Did not get a response callback for writer, cannot continue") unless $respond;
+                $app->handle_request(env => $env, response_cb => $respond);
+            };
+        };
+    }
+
+In this case <$app> is you L<Catalyst> application (not to be confused with the
+context, which munges together your application along with request and response
+information).  $app at this point is fully initialized, and all the models, views
+and controllers are loaded up.
+
+So what happens is that L<Catalyst> returns to the server a L<PSGI> app in the delayed
+response form.  Right here in this method we are not building any responses, we are just
+grabbing the PSGI env and the $responder and sending that off to the ->handle_request
+method of the main $app.
+
+You can refer to the handle_request method here, btw:
+
+L<https://metacpan.org/source/JJNAPIORK/Catalyst-Runtime-5.90051/lib/Catalyst.pm#L2019>
+
+This is a longer method so we won't snip the full code, but the important thing
+to note is that it is this method that prepares the $context, dispatches the
+request, and then calls finalize to serve up the response.  The finalize method, you 
+can see here:
+
+L<https://metacpan.org/source/JJNAPIORK/Catalyst-Runtime-5.90051/lib/Catalyst.pm#L1830>
+
+And that finalizes the response and also does some housecleaning around stats and logs.
+It finalized the response by calling a method called (oddly enough :) ) C<finalize_body>.
+BTW, it finalized the headers first, as you might expect.
+
+L<Catalyst> plays a bit of a game here, since C<finalize_body> on Catalyst.pm just
+delegates the work to the same named method in L<Catalyst::Engine>.  This might just be
+a holdover from the pre PSGI days, but that's what it does now.  So to see the real
+guts of how the body gets finalized you need to look over here:
+
+L<https://metacpan.org/source/JJNAPIORK/Catalyst-Runtime-5.90051/lib/Catalyst/Engine.pm#L69>
+
+Now that is a method worth snipping and discussing:
+
+    sub finalize_body {
+        my ( $self, $c ) = @_;
+        return if $c->response->_has_write_fh;
+     
+        my $body = $c->response->body;
+        no warnings 'uninitialized';
+        if ( blessed($body) && $body->can('read') or ref($body) eq 'GLOB' ) {
+            my $got;
+            do {
+                $got = read $body, my ($buffer), $CHUNKSIZE;
+                $got = 0 unless $self->write( $c, $buffer );  # same as $c->response->write($body)
+            } while $got > 0;
+     
+            close $body;
+        }
+        else {
+            $self->write( $c, $body );  # same as $c->response->write($body)
+        }
+     
+        my $res = $c->response;
+        $res->_writer->close;
+        $res->_clear_writer;
+     
+        return;
+    }
+
+Ok, breaking it down.  $res->_writer is the $writer object you get when
+you call $responder with just the status and headers.  Remember, at this
+point L<Catalyst> has already finalized the headers, so its safe to use them.
+If you go look at the C<write> method in L<Catalyst::Response> you'll see what
+I mean here.
+
+Ok so, when you give $c->response->body a string, that string gets written all
+at once, and if you give it a filehandle, it calls ->read on that in blocks
+of size $CHUNKSIZE (which is a global variable you can monkey patch to a higher
+or lower value, btw.).  So that's how L<Catalyst> can handle streaming of your
+filehandles.  Its very similar to the examples we saw in the previous article
+where we call $writer->write a bunch of times, followed by $writer->close.
+L<Catalyst> is just playing into the L<PSGI> specification here, but of course
+we need to adapt the L<Catalyst> object MVC approach to what L<PSGI> expects.
+
+So this is what happens if you set $c->response->body( $string ) or
+$c->response->body( $filehandle ).  
+
+Additionally, L<Catalyst> has long supported the ability to stream writes 
+programatically in your Controllers via the L<Catalyst::Response/res-write-data>
+method.  This would allow you to stream a response in bits, as you have them.
+For example you could do:
+
+    sub myaction :Local {
+      my ($self, $c) = @_;
+      $c->res->write("Hello");
+      $c->res->write(" ");
+      $c->res->write("World");
+    }
+
+And that would work nearly identically to the much similar example L<PSGI>
+application we've already looked at.   The C<finalize_body> method will close
+the writer for you, so you don't need to worry about it.
+
+So between calling the C<write> method on L<Catalyst::Response> and setting
+the response body to a filehandle (or filehandle like, for example this could
+be an in memory filehandle or an object that presented the filehandle API)
+L<Catalyst> leverages a lot of what you can do with a L<PSGI> delayed and/or
+streaming application.
+
+So, what is that "return if $c->response->_has_write_fh;" right at the very top
+of the method all about?  In order to understand that we need to step back
+and think about running your L<PSGI> under an event loop and using nonblocking,
+asynchronous I/O, which is our next topic!
+
+=head1 For More Information
+
+Code associated with this article:
+
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/1to4-Nonblocking-Streaming>
+
+=head1 Summary
+
+We've seen how L<Catalyst> leverages its L<PSGI> roots to support delayed and
+streaming responses.
+
+=head1 Author
+
+John Napiorkowski L<email:jjnapiork@cpan.org>
+
+=cut

@@ -1,0 +1,124 @@
+=head1 Title
+
+Using the L<Hash::MultiValue> configuration option in L<Catalyst>
+
+=head1 Overview
+
+L<Catalyst> has always supported HTML POST form parameters and 
+query parameters using a simple API via the L<Catalyst::Request>
+object.  However this API has a flaw when said parameters can be
+multi, leading to ackward boilerplate defensive code.  The L<Plack>
+community introduced L<Hash::MultiValue> as one approach to better
+manage this issue.  Starting in version 5.90050, L<Catalyst> lets
+you use L<Hash::MultiValue> via a configuration option so that you
+may use this approach in your L<Catalyst> code as well.
+
+=head1 Introduction
+
+Have you ever written code like this:
+
+    sub myaction :Path(something) {
+      my $p = (my $c = pop)->request->body_parameters;
+      my @vals = ref $p->{field} eq 'ARRAY' 
+        ? @{$p->{field}}
+          : ($p->{field});
+    }
+
+You might write code like this if the incoming body (or query) parameters can
+be single or arrays.  You might have a form with checkboxes or with select with
+multiple options.  In that case you need to do that ugly dance of checking to 
+see if the field is an arrayref or a single value.
+
+One solution to this problem is to use an instance of L<Hash::MultiValue> to
+contain your field parameters.  L<Hash::MultiValue> comes out of L<Plack> and
+was a Perlish port of a similar class in the Python WSGI framework C<Webob>.
+Its one way to approach this problem, since it gives you a consistent API
+to dealing with query and form parameters.
+
+=head1 How Does it Work?
+
+Instead of $c->request->body_parameters (and ->query_parameters) containing
+a simple hash whose values could be single or could be an arrayref, we use
+an instance of L<Hash::MultiValue> instead.  You enable this as a global
+L<Catalyst> configuration option, for example:
+
+    package MyApp;
+
+    use Catalyst;
+
+    __PACKAGE__->config(use_hash_multivalue_in_request=>1);
+    __PACKAGE__->setup;
+
+Now, whenever you call for request parameters, we build an instance of
+L<Hash::MultiValue> and store that instead of the HashRef that classic versions
+of L<Catalyst> uses.  L<Hash::MultiValue> has an API that lets you get the
+values of field keys in a consistent manner no matter what the actual underlying
+values are.  In additional, it uses overloading to support the classic 'as an 
+arrayref' interface, which works just like L<Catalyst> does today, except it
+will always return a single value (whichever the last one was).  This is likely
+a preferable behavior than the current, which can give you one or the other
+and leading your code to error out in those cases.  Here's an example:
+
+    #  suppose incoming POST parameters are such
+
+    name: John
+    age: 25
+    age: 44
+
+    sub myaction :Path(something) {
+      my $p = (my $c = pop)->request->body_parameters;
+
+      {
+        my $name = $p->{name}; # 'John'
+        my $age = $p->{age}; # 44
+      }
+
+      {
+        my $name = $p->get('name'); # 'John'
+        my $age = $p->get('age'); # 44
+      }
+
+      my @ages = $p->get_all('age'); # 26,44
+    }
+
+The approach is arguable less prone to error and reduces the need to write
+defensive code to figure out when form parameters are single values or are
+array referenences.
+
+=head1 A Full Example
+
+See the example application
+
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Hash-MuliValue>
+
+For more help and test cases.
+
+=head1 Caveats and Gotchas
+
+Although L<Hash::MultiValue> overloads to support the 'as hashref' interface,
+it is quite likely to have different values in the multi field case, and as a
+result it might break existing code (or reveal previously undetected issues
+with your code, depending on your outlook).
+
+if you are in the habit of modifying the parameter hashref directly (for example
+adding or deleting keys) like so:
+
+    $c->req->body_parameters->{some_new_field} = 'bogus field';
+
+That won't work with L<Hash::MultiValue> which instead offers an API for adding
+and deleting fields in a consistent way.
+
+=head1 Summary
+
+L<Hash::MultiValue> is an approach to better encapsulate access to classic HTML
+form POST and query parameters.  It provides a consistent API and smooths over
+some common issues you might have with the existing L<Catalyst> approach.  If
+so, you can enable this new feature with a single, global configuration option!
+
+=head1 Also See
+
+=head1 Author
+
+John Napiorkowski L<email:jjnapiork@cpan.org>
+
+=cut
