@@ -4,7 +4,7 @@
 <head>
 <title></title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
-<link rev="made" href="mailto:johnk@johnklxopr.(none)" />
+<link rev="made" href="mailto:root@maya.(none)" />
 </head>
 
 <body style="background-color: white">
@@ -22,7 +22,8 @@
     </ul>
   </li>
   <li><a href="#Preparing-the-Environment">Preparing the Environment</a></li>
-  <li><a href="#SECTIONS">$SECTIONS</a></li>
+  <li><a href="#You-need-to-upgrade-to-at-least-Catalyst-5.90051">You need to upgrade to at least Catalyst 5.90051</a></li>
+  <li><a href="#Catalyst::Model::WebService::Solr">Catalyst::Model::WebService::Solr</a></li>
   <li><a href="#For-More-Information">For More Information</a></li>
   <li><a href="#Summary">Summary</a></li>
   <li><a href="#Author">Author</a></li>
@@ -42,7 +43,7 @@
 
 <h2 id="Solr-Basics">Solr Basics</h2>
 
-<p>Solr is a java servelet run from a .war file, implementing a web based interface to Lucene. Requests to Solr are made via http requests. Request data may be sent in either post or get values. Data is returned in json but Solr will also return data in xml or csv formats. Similarly posts of data to Solr may be in any of these formats. Lucene provides indexing and search technology, as well as spellchecking, hit highlighting and advanced analysis/tokenization capabilities.</p>
+<p>Solr is a java servelet, implementing a web based interface to Lucene. Requests to Solr are made via http requests. Request data may be sent in either post or get values. Data is returned in json but Solr will also return data in xml or csv formats. Similarly posts of data to Solr may be in any of these formats. Lucene provides indexing and search technology, as well as spellchecking, hit highlighting and advanced analysis/tokenization capabilities. The Data Import Handler will allow you to import from lots of other sources rather than needing to post it all through web requests. Once up and going it gives you a lot of possibilities for finding documents.</p>
 
 <h2 id="Alternatives-To-Solr">Alternatives To Solr</h2>
 
@@ -57,9 +58,107 @@
 
 <h1 id="Preparing-the-Environment">Preparing the Environment</h1>
 
-<p>You will need to obviously have a Catalyst Development Environment, in addition you should install WebService::Solr and optionally Catalyst::Model::WebService::Solr. You will also need to download a copy of Solr from <a href="http://lucene.apache.org/solr/downloads.html">http://lucene.apache.org/solr/downloads.html</a>.</p>
+<p>You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and optionally Catalyst::Model::WebService::Solr. You will also need to install a JVM like open JDK and then download a copy of Solr from <a href="http://lucene.apache.org/solr/downloads.html">http://lucene.apache.org/solr/downloads.html</a>. Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I&#39;ll refer you to the Solr tutorial, to speed up you use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have solr running locally with the test data loaded and answering the default port 8983 ,</p>
 
-<h1 id="SECTIONS">$SECTIONS</h1>
+<pre><code> Terminal 1
+ cd ..path_to../example
+ java -jar start.jar
+ 
+ Terminal 2
+ cd ..path_to../example/exampledocs
+ ./post.sh *.xml</code></pre>
+
+<h1 id="You-need-to-upgrade-to-at-least-Catalyst-5.90051">You need to upgrade to at least Catalyst 5.90051</h1>
+
+<p>Catalyst 5.90050 introduced a new configuration setting to help with unicode compatibility. If updating Catalyst isn&#39;t an option for you the workaround I was using is detailed in rtcpan bug 89288. I also strongly recommend using the latest Perl. Just about every release of Perl has some improvement to unicode handling, I used 5.18.1 when developing this tutorial with Plenv and PerlBrew there is no good reason not to.</p>
+
+<p>Create A Project</p>
+
+<pre><code> catalyst.pl SolrDemo
+ cd SolrDemo
+ ./script/solremo_create.pl view HTML TT
+ </code></pre>
+
+<p>Edit the SolrDemo.conf files</p>
+
+<pre><code> solrserver         http://localhost:8983/solr/</code></pre>
+
+<p>Edit the config section of lib/SolrDemo.pm</p>
+
+<pre><code> __PACKAGE__-&gt;config(
+    name =&gt; &#39;SolrDemo&#39;,
+    # Disable deprecated behavior needed by old applications
+    disable_component_resolution_regex_fallback =&gt; 1,
+    enable_catalyst_header =&gt; 1, # Send X-Catalyst header
+    encoding =&gt; &#39;utf8&#39;, # prevents wide character explosions
+    &#39;View::HTML&#39; =&gt; {  #Set the location for TT files        
+         INCLUDE_PATH =&gt; [ CalEvt-&gt;path_to( &#39;root&#39; ), ], },    
+ );</code></pre>
+
+<p>Create a Model and Test</p>
+
+<pre><code> touch lib/SolrDemo/Model/Solr.pm
+ touch lib/SolrDemo/Model/SolrModelSolr.pm 
+ touch 
+ touch t/model_solr.t
+ </code></pre>
+
+<h1 id="Catalyst::Model::WebService::Solr">Catalyst::Model::WebService::Solr</h1>
+
+<p>The first excercise is going to use WebService::Solr::Query.</p>
+
+<pre><code>    package SolrDemo::Controller::Thin;
+    use Moose;
+    use namespace::autoclean;
+    use WebService::Solr::Query;
+
+    BEGIN { extends &#39;Catalyst::Controller&#39; }
+
+    #you wouldn&#39;t keep code like this in your project&#39;s controller it belongs in a model or external module.
+    sub response2info {
+        my $response = shift;
+        my $raw      = $response-&gt;raw_response();
+        my $pre      = &#39;&#39;;
+        $pre .= &quot;\n_msg\n&quot; . $raw-&gt;{&#39;_msg&#39;};
+        $pre .= &quot;\n_headers&quot;;
+        my %hheaders = %{ $raw-&gt;{&#39;_headers&#39;} };
+        for ( keys %hheaders ) { $pre .= &quot;\n    $_ = $hheaders{$_}&quot;; }
+        $pre .= &quot;\n_request&quot;;
+        my %rreq = %{ $raw-&gt;{&#39;_request&#39;} };
+        for ( keys %rreq ) { $pre .= &quot;\n    $_ = $rreq{$_}&quot;; }
+        $pre .= &quot;\n_content&lt;/pre&gt;\n&quot; . $raw-&gt;{&#39;_content&#39;} . &#39;&lt;pre&gt;&#39;;
+        $pre .= &quot;\n_rc\n&quot; . $raw-&gt;{&#39;_rc&#39;};
+        $pre .= &quot;\n_protocol\n&quot; . $raw-&gt;{&#39;_protocol&#39;};
+        $pre .= &quot;\nRequest Status (via method)\n&quot; . $response-&gt;solr_status();
+        my @docs = $response-&gt;docs;
+        $pre .= &quot;\nDocument Count: &quot; . scalar(@docs);
+        return $pre;
+    }
+
+    sub dump :Local :Args(0) {
+        my ( $self, $c ) = @_;
+        my $response   = $c-&gt;model(&#39;MSolr&#39;)-&gt;search(&#39;(*:*)&#39;, { rows =&gt; 10000 } );
+        my @docs       = $response-&gt;docs;
+        $c-&gt;log-&gt;info( &quot;\nDocument Count: &quot; . scalar(@docs) );
+        my $pre = &amp;response2info($response);
+        $c-&gt;response-&gt;body(&quot;&lt;pre&gt;$pre &lt;/pre&gt;&quot;);
+    }
+
+    sub select :Local :Args(0) {
+        my ( $self, $c ) = @_;
+    my $response   = $c-&gt;model(&#39;MSolr&#39;)-&gt;search(
+            WebService::Solr::Query-&gt;new( { text =&gt; [&#39;hard drive&#39;] } ), { rows =&gt; 10000 } );        
+        my $pre = &amp;response2info($response);
+        $c-&gt;response-&gt;body(&quot;&lt;pre&gt;$pre &lt;/pre&gt;&quot;);
+    }
+
+    __PACKAGE__-&gt;meta-&gt;make_immutable;
+
+    1;</code></pre>
+
+<p>lib/SolrDemo/Model/SolrModelSolr.pm</p>
+
+<pre><code> =head1 $SECTIONS</code></pre>
 
 <p>As many sections as neeed to complete the article!</p>
 

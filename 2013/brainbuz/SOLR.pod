@@ -30,7 +30,7 @@ all of the modules have problems both in bugs and unimplemented features. I look
 
 =head1 Preparing the Environment
 
-You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and optionally Catalyst::Model::WebService::Solr. You will also need to install a JVM like open JDK and then download a copy of Solr  from L<http://lucene.apache.org/solr/downloads.html|http://lucene.apache.org/solr/downloads.html>.  Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I'll refer you to the Solr tutorial, to speed up you use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents.
+You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and optionally Catalyst::Model::WebService::Solr. You will also need to install a JVM like open JDK and then download a copy of Solr  from L<http://lucene.apache.org/solr/downloads.html|http://lucene.apache.org/solr/downloads.html>.  Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I'll refer you to the Solr tutorial, to speed up you use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have solr running locally with the test data loaded and answering the default port 8983 ,
  
  Terminal 1
  cd ..path_to../example
@@ -40,20 +40,130 @@ You will need to have a Catalyst Development Environment ready, in addition you 
  cd ..path_to../example/exampledocs
  ./post.sh *.xml
 
-=head1 How Implement a Thin Model
+=head1 You need to upgrade to at least Catalyst 5.90051
 
-If you would like to implement a thin model, use Catalyst::Model::WebService::Solr. It is pretty easy to install from the POD, but as a practical matter you'll need to 
-do a bunch of work which doesn't belong in your Controller to prepare your queries, for which reason I am not going to deal with it further.
+Catalyst 5.90050 introduced a new configuration setting to help with unicode compatibility. If updating Catalyst isn't an option for you the workaround I was using is detailed in rtcpan bug 89288. I also strongly recommend using the latest Perl. Just about every release of Perl has some improvement to unicode handling, I used 5.18.1 when developing this tutorial with Plenv and PerlBrew there is no good reason not to.
 
-=head1 How Implement a Fat Model
+Create A Project
 
-With a fat model you can include your supporting methods in the model, and test them in place in the model, and it is easy to write tests against your Model. So you want to put as much of your Solr related logic into the Model (or into some standalone modules in lib if you find yourself cutting and pasting between Model modules). I implemented the fat model as a simple extension of Catalyst::Model. 
+ catalyst.pl SolrDemo
+ cd SolrDemo
+ ./script/solremo_create.pl view HTML TT
+ 
+Edit the SolrDemo.conf files
+
+ solrserver         http://localhost:8983/solr/
+
+Edit the config section of lib/SolrDemo.pm 
+
+ __PACKAGE__->config(
+    name => 'SolrDemo',
+    # Disable deprecated behavior needed by old applications
+    disable_component_resolution_regex_fallback => 1,
+    enable_catalyst_header => 1, # Send X-Catalyst header
+    encoding => 'utf8', # prevents wide character explosions
+    'View::HTML' => {  #Set the location for TT files        
+         INCLUDE_PATH => [ CalEvt->path_to( 'root' ), ], },    
+ );
+
+Create the files we'll need
+
+ touch lib/SolrDemo/Model/Solr.pm
+ touch lib/SolrDemo/Model/SolrModelSolr.pm
+ touch lib/SolrDemo/Controller/Thin.pm 
+ touch t/model_solr.t
+ 
+=head1 Catalyst::Model::WebService::Solr
+
+The first excercise is going to use Catalyst::Model::WebService::Solr. 
+
+File: lib/SolrDemo/Controller/Thin.pm 
+
+    package SolrDemo::Controller::Thin;
+    use Moose;
+    use namespace::autoclean;
+    use WebService::Solr::Query;
+
+    BEGIN { extends 'Catalyst::Controller' }
+
+    sub response2info {
+        my $response = shift;
+        my $raw      = $response->raw_response();
+        my $pre      = '';
+        $pre .= "\n_msg\n" . $raw->{'_msg'};
+        $pre .= "\n_headers";
+        my %hheaders = %{ $raw->{'_headers'} };
+        for ( keys %hheaders ) { $pre .= "\n    $_ = $hheaders{$_}"; }
+        $pre .= "\n_request";
+        my %rreq = %{ $raw->{'_request'} };
+        for ( keys %rreq ) { $pre .= "\n    $_ = $rreq{$_}"; }
+        $pre .= "\n_content</pre>\n" . $raw->{'_content'} . '<pre>';
+        $pre .= "\n_rc\n" . $raw->{'_rc'};
+        $pre .= "\n_protocol\n" . $raw->{'_protocol'};
+        $pre .= "\nRequest Status (via method)\n" . $response->solr_status();
+        my @docs = $response->docs;
+        $pre .= "\nDocument Count: " . scalar(@docs);
+        return $pre;
+    }
+
+    sub dump :Local :Args(0) {
+        my ( $self, $c ) = @_;
+        my $response   = $c->model('MSolr')->search(
+            WebService::Solr::Query->new( { '*' => \'*' } ),
+            { rows => 10000 } 
+            );
+        my @docs       = $response->docs;
+        $c->log->info( "\nDocument Count: " . scalar(@docs) );
+        my $pre = &response2info($response);
+        $c->response->body("<pre>$pre </pre>");
+    }
+
+    sub select :Local :Args(0) {
+        my ( $self, $c ) = @_;
+        my $response   = $c->model('MSolr')->search(
+            WebService::Solr::Query->new( 
+                { text => ['hard drive'] } ), { rows => 10000 } );        
+        my $pre = &response2info($response);
+        $c->response->body("<pre>$pre </pre>");
+    } 
+
+    __PACKAGE__->meta->make_immutable;
+
+    1;
+
+=head2 About the thin controller
+
+=head3 response2info
+
+The response2info sub consolidates code that would have been repeated by both methods. Functionally this is view code, but I'm not using a view in this example, for convenience it goes here. What we're doing with this method is a raw dump of everything returned by WebService::Solr. 
+
+=head3 dump
+
+Executes a query for all records in the solr database. Notice that we need WebService::Solr::Query to help generate queries, I've proposed a shortcut for what you see in the first argument. To generate the query you need to pass a hashref of the solr fields you want and the values for the fields, the \ indicates to pass the second * as a literal string. The second argument is a hashref of options, here we need to override the solr default of returning 10 rows by specifying an arbitrary high value.
+
+=head3 select
+
+This select query is hard coded to find items matching the phrase 'hard drive', which, we see from the spew, gets translated as 'hard+drive'. Here we specified the field text (which is a catch-all field defined to hold everything searchable) and passed an array ref to the list of values. If you copy and rename the method and then change the field list to C<['hard drive','maxtor']>, you will find that you still get the same 2 records, this is because of solr's matching behaviour. If you want to filter for only maxtor hard drives you'll need to use a filter query which is specified in the options.
+
+Add the following method to Thin.pm
+
+    sub maxtor :Local :Args(0) {
+        my ( $self, $c ) = @_;
+        my $maxq = WebService::Solr::Query->new({ manu => ['maxtor'] });
+        my $response   = $c->model('MSolr')->search(
+            WebService::Solr::Query->new( 
+                { text => ['hard drive'] } ), 
+                { rows => 10000, fq => $maxq } );        
+        my $pre = &response2info($response);
+        $c->response->body("<pre>$pre </pre>");
+    } 
+    
+As you add options to your queries you are going to have more and more of this code in your controllers. You may also have additional logic to convert user input into queries. Living in a controller this code will become hard to test and it will clutter your controllers.     
 
 
 
-
-
-=head1 $SECTIONS
+ 
+ =head1 $SECTIONS
 
 As many sections as neeed to complete the article!
 
