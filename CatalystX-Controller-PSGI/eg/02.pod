@@ -28,6 +28,150 @@ Catalyst Models and using the ACCEPT_CONTEXT hook to pass them to the legacy app
 
 We'll start by inlining our legacy app.
 
+Change the _build_legacy_app method in Root.pm to contain the contents of the
+legacy psgi.
+
+    use Legacy::App;
+    use Legacy::DB;
+
+    sub _build_legacy_app {
+        my $db = Legacy::DB->new(
+            dbspec  => "legacy",
+            region  => "en",
+        );
+
+        my $legacy_app = Legacy::App->new(
+            db      => $db,
+        );
+
+        my $app = sub {
+            my ( $env ) = @_;
+
+            my ( $status, $body );
+            if ( $env->{PATH_INFO} eq 'some/action' ) {
+               ( $status, $body ) = $legacy_app->handle_request( $env->{PATH_INFO} );
+            }
+            elsif ( $env->{PATH_INFO} eq 'some/other/action' ) {
+               ( $status, $body ) = $legacy_app->handle_request( $env->{PATH_INFO} );
+            }
+            elsif ( $env->{PATH_INFO} eq 'foo' ) {
+               ( $status, $body ) = $legacy_app->handle_request( $env->{PATH_INFO} );
+            }
+            else {
+                $status = 404;
+                $body = 'not found';
+            }
+
+            my $res = Plack::Response->new( $status );
+            $res->content_type('text/html');
+            $res->body( $body );
+
+            return $res->finalize;
+        };
+
+        $app;
+    }
+
+Looking at our legacy app, we only need a few urls, one of which has already
+been over writte, so could tidy it up a bit, and seperate out the not found
+action into a proper Catalyst action, if instead of using call we use mount.
+The downside of this is we pass a subref to mount, so we can't use a Moose
+attribute, but that's ok.
+
+So remove the legacy app attribute, and replace it with a plain old subref, which
+we can pass to mount. And whilst we're at it remove the not found handler and the
+/some/other/action handler, since we've replaced that. A good thing to note with
+mount is that as well as $env being passed in, $self is aswell.
+
+    use Legacy::App;
+    use Legacy::DB;
+
+    my $app = sub {
+        my $db = Legacy::DB->new(
+            dbspec  => "legacy",
+            region  => "en",
+        );
+
+        my $legacy_app = Legacy::App->new(
+            db      => $db,
+        );
+
+        my $app = sub {
+            my ( $env ) = @_;
+
+            my ( $status, $body );
+            if ( $env->{PATH_INFO} eq 'some/action' ) {
+               ( $status, $body ) = $legacy_app->handle_request( $env->{PATH_INFO} );
+            }
+            elsif ( $env->{PATH_INFO} eq 'foo' ) {
+               ( $status, $body ) = $legacy_app->handle_request( $env->{PATH_INFO} );
+            }
+
+            my $res = Plack::Response->new( $status );
+            $res->content_type('text/html');
+            $res->body( $body );
+
+            return $res->finalize;
+        };
+
+        $app;
+    }
+
+    __PACKAGE__->mount( 'some/action'   => $app );
+    __PACKAGE__->mount( 'foo'           => $app );
+
+There's a lot going on there, and we can split it up further, lets do some
+cleaning and add a Cataylst 404 handler, aka the default action
+
+    use Legacy::App;
+    use Legacy::DB;
+
+    has "_db" => (
+        is      => 'ro',
+        builder => '_build_db',
+        lazy    => 1,
+    );
+    sub _build_db {
+        my $self = shift;
+        return Legacy::DB->new(
+            dbspec  => "legacy",
+            region  => "en",
+        );
+    }
+
+    has "_legacy_app" => (
+        is      => "ro",
+        builder => "_build_legacy_app",
+        lazy    => 1,
+    );
+    sub _build_legacy_app {
+        my $self = shift;
+        return Legacy::App->new(
+            db      => $self->_db,
+        );
+    }
+
+    my $legacy_app_wrapper = sub {
+        my ( $self, $env ) = @_;
+        my ( $status, $body ) = $self->_legacy_app->handle_request( $env->{PATH_INFO} );
+
+        my $res = Plack::Response->new( $status );
+        $res->content_type('text/html');
+        $res->body( $body );
+
+        return $res->finalize;
+    };
+
+    __PACKAGE__->mount( 'some/action'   => $legacy_app_wrapper );
+    __PACKAGE__->mount( 'foo'           => $legacy_app_wrapper );
+
+    sub default: Local{
+        my ( $self, $c ) = @_;
+
+        $c->res->body('not found');
+        $c->res->status(404);
+    }
+
 =head1 Summary
 
 =head1 Author

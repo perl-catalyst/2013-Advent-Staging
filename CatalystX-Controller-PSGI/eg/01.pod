@@ -91,21 +91,30 @@ bin/legacy.psgi doesn't exist. So let's fix that by creating it.
     use warnings;
     use Plack::Response;
 
-    #let's pretend this is a legacy app wrapped in plack...
+    use Legacy::App;
+    use Legacy::DB;
+
+    my $db = Legacy::DB->new(
+        dbspec  => "legacy",
+        region  => "en",
+    );
+
+    my $legacy_app = Legacy::App->new(
+        db      => $db,
+    );
+
     my $app = sub {
         my ( $env ) = @_;
 
-        #ugly, but it'll prove our point, which is all that matters
-        my $status = 200;
-        my $body;
+        my ( $status, $body );
         if ( $env->{PATH_INFO} eq 'some/action' ) {
-            $body = "this is some/action";
+           ( $status, $body ) = $legacy_app->handle_request("some/action");
         }
         elsif ( $env->{PATH_INFO} eq 'some/other/action' ) {
-            $body = "this is some/other/action";
+           ( $status, $body ) = $legacy_app->handle_request("some/other/action");
         }
         elsif ( $env->{PATH_INFO} eq 'foo' ) {
-            $body = "this is foo";
+           ( $status, $body ) = $legacy_app->handle_request("foo");
         }
         else {
             $status = 404;
@@ -143,7 +152,7 @@ edit the above add the following
     use Moose;
     use namespace::autoclean;
 
-    BEGIN { extends 'CatalystX::Controller::PSGI' };
+    BEGIN { extends 'Catalyst::Controller' };
 
     sub other_action: Path('other/action') {
         my ( $self, $c ) = @_;
