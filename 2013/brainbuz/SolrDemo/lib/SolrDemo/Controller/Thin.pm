@@ -1,7 +1,7 @@
 package SolrDemo::Controller::Thin;
-use Moose;
 use namespace::autoclean;
 use WebService::Solr::Query;
+use Moose;
 
 BEGIN { extends 'Catalyst::Controller' }
 
@@ -23,55 +23,59 @@ sub response2info {
     my @docs = $response->docs;
     $pre .= "\nDocument Count: " . scalar(@docs);
     return $pre;
- }
+}
 
-sub dump :Local :Args(0) {
+sub dump : Local : Args(0) {
     my ( $self, $c ) = @_;
-    my $response   = $c->model('SolrModelSolr')->search(
-        WebService::Solr::Query->new( { '*' => \'*' } ), 
+    my $response =
+      $c->model('SolrModelSolr')
+      ->search( WebService::Solr::Query->new( { '*' => \'*' } ),
         { rows => 10000 } );
-    my @docs       = $response->docs;
+    my @docs = $response->docs;
     $c->log->info( "\nDocument Count: " . scalar(@docs) );
     my $pre = &response2info($response);
     $c->response->body("<pre>$pre </pre>");
 }
 
-sub select :Local :Args(0) {
+sub select : Local : Args(0) {
     my ( $self, $c ) = @_;
-my $response   = $c->model('SolrModelSolr')->search(
-        WebService::Solr::Query->new( { text => ['hard drive'] } ), { rows => 10000 } );        
+    my $response =
+      $c->model('SolrModelSolr')
+      ->search( WebService::Solr::Query->new( { text => ['hard drive'] } ),
+        { rows => 10000 } );
     my $pre = &response2info($response);
     $c->response->body("<pre>$pre </pre>");
 }
 
-    sub maxtor :Local :Args(0) {
-        my ( $self, $c ) = @_;
-        my $maxq = WebService::Solr::Query->new({ manu => ['maxtor'] });
-        my $response   = $c->model('SolrModelSolr')->search(
-            WebService::Solr::Query->new( 
-                { text => ['hard drive'] } ), 
-                { rows => 10000, fq => $maxq } );        
-        my $pre = &response2info($response);
-        $c->response->body("<pre>$pre </pre>");
-    }     
-    
-sub realquery  :Local :Args(2) {
-    my ( $self, $c, $fieldname, $fieldvalue ) = @_; 
-    my $response = $c->model('SolrModelSolr')->search(
-        WebService::Solr::Query->new( { $fieldname => [ $fieldvalue ] } ), { rows => 10000 } );  
-    my @docs = $response->docs ;
+sub maxtor : Local : Args(0) {
+    my ( $self, $c ) = @_;
+    my $maxq = WebService::Solr::Query->new( { manu => ['maxtor'] } );
+    my $response =
+      $c->model('SolrModelSolr')
+      ->search( WebService::Solr::Query->new( { text => ['hard drive'] } ),
+        { rows => 10000, fq => $maxq } );
+    my $pre = &response2info($response);
+    $c->response->body("<pre>$pre </pre>");
+}
+
+sub realquery : Local : Args(2) {
+    my ( $self, $c, $fieldname, $fieldvalue ) = @_;
+    my $response =
+      $c->model('SolrModelSolr')
+      ->search( WebService::Solr::Query->new( { $fieldname => [$fieldvalue] } ),
+        { rows => 10000 } );
+    my @docs = $response->docs;
     $c->stash(
         template => 'results.tt',
-        field => $fieldname,
-        value => $fieldvalue, 
-        docs => \@docs );   
-    }
-    
+        field    => $fieldname,
+        value    => $fieldvalue,
+        docs     => \@docs
+    );
+}
 
 __PACKAGE__->meta->make_immutable;
 
 1;
-
 
 =head1 AUTHOR
 

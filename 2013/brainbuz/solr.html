@@ -22,8 +22,20 @@
     </ul>
   </li>
   <li><a href="#Preparing-the-Environment">Preparing the Environment</a></li>
-  <li><a href="#You-need-to-upgrade-to-at-least-Catalyst-5.90051">You need to upgrade to at least Catalyst 5.90051</a></li>
-  <li><a href="#Catalyst::Model::WebService::Solr">Catalyst::Model::WebService::Solr</a></li>
+  <li><a href="#Create-A-Project-with-a-Template-Toolkit-View">Create A Project with a Template Toolkit View</a></li>
+  <li><a href="#A-Thin-Model-with-Catalyst::Model::WebService::Solr">A Thin Model with Catalyst::Model::WebService::Solr</a>
+    <ul>
+      <li><a href="#About-the-thin-controller">About the thin controller</a>
+        <ul>
+          <li><a href="#response2info">response2info</a></li>
+          <li><a href="#dump">dump</a></li>
+          <li><a href="#select">select</a></li>
+          <li><a href="#a-real-search">a real search</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#Moving-to-a-Fat-Model">Moving to a Fat Model</a></li>
   <li><a href="#For-More-Information">For More Information</a></li>
   <li><a href="#Summary">Summary</a></li>
   <li><a href="#Author">Author</a></li>
@@ -31,7 +43,7 @@
 
 <h1 id="TITLE">TITLE</h1>
 
-<p>An Example Catalyst Plugin - Catalyst::Plugin::RunRequest</p>
+<p>Using SOLR in a Catalyst Model with WebService::Solr</p>
 
 <h1 id="OVERVIEW">OVERVIEW</h1>
 
@@ -39,7 +51,7 @@
 
 <h1 id="INTRODUCTION">INTRODUCTION</h1>
 
-<p>Compared to conventional database search (and the full text query extensions found in most modern SQL implementations), a Search Server is going to provide better performance and search features. Since Solr is writeable as well as readable it can be used as a NoSQL datastore, with all the caveats that accompany something which is certainly not ACID compliant.</p>
+<p>Compared to conventional database search (and the full text query extensions found in most modern SQL implementations), a Search Server is going to provide better performance and search features. Since Solr is writeable as well as readable it can be used as a NoSQL datastore.</p>
 
 <h2 id="Solr-Basics">Solr Basics</h2>
 
@@ -47,18 +59,19 @@
 
 <h2 id="Alternatives-To-Solr">Alternatives To Solr</h2>
 
+<p>The most obvious alternative to Solr is direct implementation of Lucene. Since the purpose of Solr is to provide a more useable interface to Lucene in the first place, this does not seem like a good way to get started. An Alternative to Solr that is also built on Lucene is <a href="http://www.elasticsearch.org">ElasticSearch</a>. At this time there is far more written about Solr and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under very active development.</p>
 
-
-<p>The most obvious alternative to Solr is direct implementation of Lucene. Since the purpose of Solr is to provide a more useable interface to Lucene in the first place, this does not seem like a good way to get started. An Alternative to Solr that is also built on Lucene is <a href="http://www.elasticsearch.org">ElasticSearch</a>. At this time there is far more written about Solr and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under very active development. </p>
-<p>The Google Search Appliance offerings are expensive and have a lot of functionality limitations, they are great for simple search collections, Google also has a cloud based search offering, which has considerably less features than the appliance. The best google alternative is to point your visitors at google.com with a site qualifier in the redirect (or any other public search engine). For a lot of developers the AWS CloudSearch service is going to be of great interest, while not free as Solr is the administrative costs will for most enterprises make it the cheaper choice vs Solr or Google Appliance, on the downside it has a far more limited feature set than Solr and does not offer the option of going under the hood as Lucene provides to Solr. If you want to look at even more options Google or DuckDuckGo (who don't seem to be trying to sell search tools at the moment) will help you find them.</p>
+<p>Google Search Appliances offerings are expensive and have a lot of functionality limitations, Google also has a cloud based search offering, which has considerably less features than the appliance. The cheap google alternative is to point your visitors at google.com with a site qualifier in the redirect (or any other public search engine). For a lot of developers the AWS CloudSearch service is going to be of great interest, while not free as Solr is, the administrative costs will for most enterprises make it the cheaper choice vs Solr or Google Appliance, on the downside it has a far more limited feature set than Solr and does not offer the option of going under the hood as Lucene provides to Solr.</p>
 
 <h2 id="Perl-Modules">Perl Modules</h2>
 
-<p>There are a number of Perl Modules available for Solr, the two that appear the most viable are Apache::Solr and WebService::Solr. Unfortunately, all of the modules have problems both in bugs and unimplemented features. I looked at these and some other options and my first time through none of them rated satisfactory. Initally I had the best luck with Apache::Solr but was not very satisfied with it. After reading through the source code several of the modules, I decided to work with WebService::Solr.</p>
+<p>There are a number of Perl Modules available for Solr, the two that appear the most viable are Apache::Solr and WebService::Solr. Unfortunately, all of the modules have problems both in bugs and unimplemented features. Initally I had the best luck with Apache::Solr but ran into some limitations there. After reading through the source code several of the modules, I decided to work with WebService::Solr. At present it looks like Apache::Solr is being more actively developed so in the future it could overtake WebService::Solr.</p>
 
 <h1 id="Preparing-the-Environment">Preparing the Environment</h1>
 
-<p>You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and optionally Catalyst::Model::WebService::Solr. You will also need to install a JVM like open JDK and then download a copy of Solr from <a href="http://lucene.apache.org/solr/downloads.html">http://lucene.apache.org/solr/downloads.html</a>. Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I&#39;ll refer you to the Solr tutorial, to speed up you use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have solr running locally with the test data loaded and answering the default port 8983 ,</p>
+<p>You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and Catalyst::Model::WebService::Solr. Catalyst 5.90050 introduced a new configuration setting to help with unicode compatibility. If updating Catalyst isn&#39;t an option for you the workaround I was using is detailed in rtcpan bug 89288. I also strongly recommend using the latest Perl.</p>
+
+<p>You will also need to install a JVM like open JDK and then download a copy of Solr from <a href="http://lucene.apache.org/solr/downloads.html">http://lucene.apache.org/solr/downloads.html</a>. Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I&#39;ll refer you to the Solr tutorial, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have solr running locally with the test data loaded and answering the default port 8983 ,</p>
 
 <pre><code> Terminal 1
  cd ..path_to../example
@@ -68,20 +81,16 @@
  cd ..path_to../example/exampledocs
  ./post.sh *.xml</code></pre>
 
-<h1 id="You-need-to-upgrade-to-at-least-Catalyst-5.90051">You need to upgrade to at least Catalyst 5.90051</h1>
-
-<p>Catalyst 5.90050 introduced a new configuration setting to help with unicode compatibility. If updating Catalyst isn&#39;t an option for you the workaround I was using is detailed in rtcpan bug 89288. I also strongly recommend using the latest Perl. Just about every release of Perl has some improvement to unicode handling, I used 5.18.1 when developing this tutorial with Plenv and PerlBrew there is no good reason not to.</p>
-
-<p>Create A Project</p>
+<h1 id="Create-A-Project-with-a-Template-Toolkit-View">Create A Project with a Template Toolkit View</h1>
 
 <pre><code> catalyst.pl SolrDemo
  cd SolrDemo
- ./script/solremo_create.pl view HTML TT
+ ./script/solrdemo_create.pl view HTML TT
  </code></pre>
 
 <p>Edit the SolrDemo.conf files</p>
 
-<pre><code> solrserver         http://localhost:8983/solr/</code></pre>
+<pre><code> solrserver         http://localhost:8983/solr/collection1</code></pre>
 
 <p>Edit the config section of lib/SolrDemo.pm</p>
 
@@ -95,26 +104,27 @@
          INCLUDE_PATH =&gt; [ CalEvt-&gt;path_to( &#39;root&#39; ), ], },    
  );</code></pre>
 
-<p>Create a Model and Test</p>
+<p>Create the additional files we&#39;ll need</p>
 
 <pre><code> touch lib/SolrDemo/Model/Solr.pm
- touch lib/SolrDemo/Model/SolrModelSolr.pm 
- touch 
+ touch lib/SolrDemo/Model/SolrModelSolr.pm
+ touch lib/SolrDemo/Controller/Thin.pm
+ touch lib/SolrDemo/Controller/Thin.pm 
+ touch root/results.tt
  touch t/model_solr.t
  </code></pre>
 
-<h1 id="Catalyst::Model::WebService::Solr">Catalyst::Model::WebService::Solr</h1>
+<h1 id="A-Thin-Model-with-Catalyst::Model::WebService::Solr">A Thin Model with Catalyst::Model::WebService::Solr</h1>
 
-<p>The first excercise is going to use WebService::Solr::Query.</p>
+<p>File: lib/SolrDemo/Controller/Thin.pm</p>
 
 <pre><code>    package SolrDemo::Controller::Thin;
-    use Moose;
     use namespace::autoclean;
     use WebService::Solr::Query;
+    use Moose;
 
     BEGIN { extends &#39;Catalyst::Controller&#39; }
 
-    #you wouldn&#39;t keep code like this in your project&#39;s controller it belongs in a model or external module.
     sub response2info {
         my $response = shift;
         my $raw      = $response-&gt;raw_response();
@@ -135,19 +145,24 @@
         return $pre;
     }
 
-    sub dump :Local :Args(0) {
+    sub dump : Local : Args(0) {
         my ( $self, $c ) = @_;
-        my $response   = $c-&gt;model(&#39;MSolr&#39;)-&gt;search(&#39;(*:*)&#39;, { rows =&gt; 10000 } );
-        my @docs       = $response-&gt;docs;
+        my $response =
+        $c-&gt;model(&#39;SolrModelSolr&#39;)
+        -&gt;search( WebService::Solr::Query-&gt;new( { &#39;*&#39; =&gt; \&#39;*&#39; } ),
+            { rows =&gt; 10000 } );
+        my @docs = $response-&gt;docs;
         $c-&gt;log-&gt;info( &quot;\nDocument Count: &quot; . scalar(@docs) );
         my $pre = &amp;response2info($response);
         $c-&gt;response-&gt;body(&quot;&lt;pre&gt;$pre &lt;/pre&gt;&quot;);
     }
 
-    sub select :Local :Args(0) {
+    sub select : Local : Args(0) {
         my ( $self, $c ) = @_;
-    my $response   = $c-&gt;model(&#39;MSolr&#39;)-&gt;search(
-            WebService::Solr::Query-&gt;new( { text =&gt; [&#39;hard drive&#39;] } ), { rows =&gt; 10000 } );        
+        my $response =
+        $c-&gt;model(&#39;SolrModelSolr&#39;)
+        -&gt;search( WebService::Solr::Query-&gt;new( { text =&gt; [&#39;hard drive&#39;] } ),
+            { rows =&gt; 10000 } );
         my $pre = &amp;response2info($response);
         $c-&gt;response-&gt;body(&quot;&lt;pre&gt;$pre &lt;/pre&gt;&quot;);
     }
@@ -156,23 +171,181 @@
 
     1;</code></pre>
 
-<p>lib/SolrDemo/Model/SolrModelSolr.pm</p>
+<h2 id="About-the-thin-controller">About the thin controller</h2>
 
-<pre><code> =head1 $SECTIONS</code></pre>
+<h3 id="response2info">response2info</h3>
 
-<p>As many sections as neeed to complete the article!</p>
+<p>The response2info sub consolidates code that would have been repeated by both methods. Functionally this is view code, but I&#39;m not using a view, for convenience it goes here. What we&#39;re doing with this method is a raw dump of everything returned by WebService::Solr.</p>
+
+<h3 id="dump">dump</h3>
+
+<p>Executes a query for all records in the solr database. Notice that we need WebService::Solr::Query to help generate queries, I&#39;ve proposed a shortcut for what you see in the first argument. To generate the query you need to pass a hashref of the solr fields you want and the values for the fields, the \ indicates to pass the second * as a literal string. The second argument is a hashref of options, here we need to override the solr default of returning 10 rows by specifying an arbitrary high value.</p>
+
+<h3 id="select">select</h3>
+
+<p>This select query is hard coded to find items matching the phrase &#39;hard drive&#39;, which, we see from the spew, gets translated as &#39;hard+drive&#39;. Here we specified the field text (which is a catch-all field defined to hold everything searchable) and passed an array ref to the list of values. If you copy and rename the method and then change the field list to <code>[&#39;hard drive&#39;,&#39;maxtor&#39;]</code>, you will find that you still get the same 2 records, this is because of solr&#39;s matching behaviour. If you want to filter for only maxtor hard drives you&#39;ll need to use a filter query which is specified in the options.</p>
+
+<p>Add the following method to Thin.pm</p>
+
+<pre><code>    sub maxtor :Local :Args(0) {
+        my ( $self, $c ) = @_;
+        my $maxq = WebService::Solr::Query-&gt;new( { manu =&gt; [&#39;maxtor&#39;] } );
+        my $response =
+        $c-&gt;model(&#39;SolrModelSolr&#39;)
+        -&gt;search( WebService::Solr::Query-&gt;new( { text =&gt; [&#39;hard drive&#39;] } ),
+            { rows =&gt; 10000, fq =&gt; $maxq } );
+        my $pre = &amp;response2info($response);
+        $c-&gt;response-&gt;body(&quot;&lt;pre&gt;$pre &lt;/pre&gt;&quot;);
+    } 
+    </code></pre>
+
+<h3 id="a-real-search">a real search</h3>
+
+<p>Add this method to Thin.pm</p>
+
+<pre><code>    sub realquery : Local : Args(2) {
+        my ( $self, $c, $fieldname, $fieldvalue ) = @_;
+        my $response =
+        $c-&gt;model(&#39;SolrModelSolr&#39;)
+        -&gt;search( WebService::Solr::Query-&gt;new( { $fieldname =&gt; [$fieldvalue] } ),
+            { rows =&gt; 10000 } );
+        my @docs = $response-&gt;docs;
+        $c-&gt;stash(
+            template =&gt; &#39;results.tt&#39;,
+            field    =&gt; $fieldname,
+            value    =&gt; $fieldvalue,
+            docs     =&gt; \@docs
+        );
+    }</code></pre>
+
+<p>Edit /root/results.tt</p>
+
+<pre><code>    &lt;h1&gt;Catalyst SolrDemo&lt;/h1&gt;
+    &lt;h2&gt;Docs in this query [% doc_count %]&lt;/h2&gt;
+    &lt;h3&gt;Field [% field %] value [%value %]&lt;/h3&gt;
+    &lt;table&gt;
+    [% FOREACH doc IN docs %]
+    &lt;tr&gt;&lt;th&gt;descriptor&lt;/th&gt;&lt;th&gt;field value&lt;/th&gt;&lt;/tr&gt;
+    [% FOREACH fieldname IN doc.field_names.sort %]
+    &lt;tr&gt;&lt;td&gt;[% fieldname %]&lt;/td&gt;&lt;td&gt;[% doc.value_for( fieldname ) %]&lt;/td&gt;&lt;/tr&gt;
+    [% END %]
+    [% END %]
+    &lt;/table&gt;</code></pre>
+
+<p>Try some queries: http://localhost:3000/thin/realquery/text/ipod http://localhost:3000/thin/realquery/features/cache http://localhost:3000/thin/realquery/manu/maxtor</p>
+
+<p>First the model returns a WebService::Solr::Response object, we use the docs method to extract an array of WebService::Solr::Document objects from it which are then passed by reference to the view. The view iterates the array and uses the <code>fieldnames</code> method to get a list of the fields in that document (not all documents in the test data have the same fields) and then iterates through it finally retrieving individual fields with the <code>value_for method</code>.</p>
+
+<h1 id="Moving-to-a-Fat-Model">Moving to a Fat Model</h1>
+
+<p>My solr search queries typically require a lot of supporting code, which is easier to test in a model than a controller, and is generally more appropriate to the model. Unlike DBI based models which maintain a connection, each request to solr is completely independent of all others and no connection is maintained between them, so instantiating a new WebService::Solr object is relatively trivial, additionally if you work with multiple collections you need to create a seperate object for each one.</p>
+
+<p>lib/SolrDemo/Model/Solr.pm</p>
+
+<pre><code>    package SolrDemo::Model::Solr;
+
+    use WebService::Solr;
+    use WebService::Solr::Query;
+    use namespace::autoclean;
+
+    use parent &#39;Catalyst::Model&#39;;
+
+    our $SOLR = WebService::Solr-&gt;new( SolrDemo-&gt;config-&gt;{solrserver} );
+
+    sub _GeoFilter {
+        my ( $location, $sfield, $distance ) = @_;
+        return qq/\{!geofilt pt=$location sfield=$sfield d=$distance\}/;
+    }
+
+    sub List {
+        my $self      = shift;
+        my $params    = shift;
+        my $mainquery = WebService::Solr::Query-&gt;new($params);
+        my %options   = ( rows =&gt; 100 );
+        my $response  = $SOLR-&gt;search( $mainquery, \%options );
+        return $response-&gt;docs;
+    }
+
+    sub Kimmel {
+        my $self         = shift;
+        my $distance     = shift;
+        my $kimmelcenter = &#39;39.95,-75.16&#39;;
+        my $mainquery    = WebService::Solr::Query-&gt;new( { &#39;*&#39; =&gt; \&#39;*&#39; } );
+        my $geofilt      = &amp;_GeoFilter( $kimmelcenter, &#39;store&#39;, $distance );
+        my %options      = ( rows =&gt; 100, fq =&gt; $geofilt );
+        my $response     = $SOLR-&gt;search( $mainquery, \%options );
+        return $response-&gt;docs;
+    }
+
+    1;</code></pre>
+
+<p>t/model_solr.t</p>
+
+<pre><code>    use Test::More;         
+                    
+    BEGIN { use_ok &#39;SolrDemo&#39; }
+
+    my $C = SolrDemo-&gt;new ;
+    my @docs = $C-&gt;model(&#39;Solr&#39;)-&gt;List( { cat =&gt; &#39;electronics&#39;, manu =&gt; &#39;corsair&#39; } );
+    is( scalar(@docs), 2, &#39;We expect 2 docs&#39; );
+
+    my $carnegiehall = &#39;40.76,-73.98&#39; ;
+    my $geofilt = &amp;SolrDemo::Model::Solr::_GeoFilter( $carnegiehall, &#39;store&#39;, 400 ) ;
+    is( $geofilt, &#39;{!geofilt pt=40.76,-73.98 sfield=store d=400}&#39;, &#39;Test geofilter construction using carnegie hall as a testcase&#39;);
+    my @docs2 = $C-&gt;model(&#39;Solr&#39;)-&gt;Kimmel( 1600 ) ;
+    is( scalar(@docs2), 3, &#39;There are 3 items within 1600 km of the Kimmel Center&#39; );
+
+    done_testing();</code></pre>
+
+<p>lib/SolrDemo/Controller/Fat.pm</p>
+
+<pre><code>    package SolrDemo::Controller::Fat;
+    use namespace::autoclean;
+    use WebService::Solr::Query;
+    use Moose;
+
+    BEGIN { extends &#39;Catalyst::Controller&#39; }
+
+    sub realquery : Local : Args(2) {
+        my ( $self, $c, $fieldname, $fieldvalue ) = @_;
+        my @docs = $c-&gt;model(&#39;Solr&#39;)-&gt;List( { $fieldname =&gt; $fieldvalue } );
+        $c-&gt;stash(
+            template =&gt; &#39;results.tt&#39;,
+            field    =&gt; $fieldname,
+            value    =&gt; $fieldvalue,
+            docs     =&gt; \@docs
+        );
+    }
+
+    sub nearkimmel : Local : Args() {
+        my ( $self, $c ) = @_;
+        my $distance = 500;
+        my @docs     = $c-&gt;model(&#39;Solr&#39;)-&gt;Kimmel(500);
+        $c-&gt;stash(
+            template =&gt; &#39;results.tt&#39;,
+            field    =&gt; &#39;Distance from Kimmel Center in Philadelphia&#39;,
+            value    =&gt; $distance,
+            docs     =&gt; \@docs
+        );
+    }
+
+    __PACKAGE__-&gt;meta-&gt;make_immutable;
+
+    1;</code></pre>
+
+<p>Because I write my models from test, I&#39;m going to test test two public and 1 private methods first. The private method generates a geofilter string, because that isn&#39;t currently implemented in WebService::Solr, but I&#39;ve proposed it for a future release. In the fat model I it is easy to directly test possible queries against my code. I&#39;ve written two methods, the first (realquery) does exactly the same as the method in the thin controller. It takes a few more lines in the fat model because I feel less urgency to be terse, and I find it easier to pick apart the bits of a complex query when each piece is sitting in its own variable. The second method (Kimmel) uses a geofilter to find the number of items within 500km of the Kimmel Center in Philadelphia. Finally with the models tested the methods are dropped into the Controller.</p>
 
 <h1 id="For-More-Information">For More Information</h1>
 
-<p>Where to go to learn more, for example links to CPAN distributions or source code on Github</p>
+<p>After following this how-to document you&#39;ll want to read the WebService::Solr Documentation. It is organized by sub-module so you probably need to read through it several times to fit everything together.</p>
 
 <h1 id="Summary">Summary</h1>
 
-<p>Review of what the reader just learned.</p>
+<p>In this article we created both Thin and Fat Models for SOLR and wrote a few tests for our Fat Model.</p>
 
 <h1 id="Author">Author</h1>
 
-<p>Your Name &lt;your@email.com&gt; IRC nick</p>
+<p>John Karr &lt;brainbuz@brainbuz.org&gt; brainbuz</p>
 
 
 </body>
