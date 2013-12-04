@@ -73,15 +73,15 @@ legacy psgi.
     }
 
 Looking at our legacy app, we only need a few urls, one of which has already
-been over writte, so could tidy it up a bit, and seperate out the not found
-action into a proper Catalyst action, if instead of using call we use mount.
+been over written. So we can tidy it up, and seperate out the not found action
+into a proper Catalyst action, if instead of using call we use mount
+
 The downside of this is we pass a subref to mount, so we can't use a Moose
 attribute, but that's ok.
 
-So remove the legacy app attribute, and replace it with a plain old subref, which
-we can pass to mount. And whilst we're at it remove the not found handler and the
-/some/other/action handler, since we've replaced that. A good thing to note with
-mount is that as well as $env being passed in, $self is aswell.
+So we'll remove the legacy app attribute, and replace it with a plain old subref,
+which we can pass to mount. And whilst we're at it remove the not found handler
+and the /some/other/action handler, since we've replaced that.
 
     use Legacy::App;
     use Legacy::DB;
@@ -122,6 +122,9 @@ mount is that as well as $env being passed in, $self is aswell.
 
 There's a lot going on there, and we can split it up further, lets do some
 cleaning and add a Cataylst 404 handler, aka the default action
+
+A good thing to note with mount is that as well as $env being passed in, $self
+is aswell, meaning we can set attributes for the legacy_app and db
 
     use Legacy::App;
     use Legacy::DB;
