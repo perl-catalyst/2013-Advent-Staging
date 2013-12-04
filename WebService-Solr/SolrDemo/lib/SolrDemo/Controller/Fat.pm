@@ -9,10 +9,10 @@ sub realquery : Local : Args(2) {
     my ( $self, $c, $fieldname, $fieldvalue ) = @_;
     my @docs = $c->model('Solr')->List( { $fieldname => $fieldvalue } );
     $c->stash(
-        template => 'results.tt',
-        field    => $fieldname,
-        value    => $fieldvalue,
-        docs     => \@docs
+        template  => 'results.tt',
+        field     => $fieldname,
+        value     => $fieldvalue,
+        docs      => \@docs,
     );
 }
 
@@ -21,10 +21,10 @@ sub nearkimmel : Local : Args() {
     my $distance = 500;
     my @docs     = $c->model('Solr')->Kimmel(500);
     $c->stash(
-        template => 'results.tt',
-        field    => 'Distance from Kimmel Center in Philadelphia',
-        value    => $distance,
-        docs     => \@docs
+        template  => 'results.tt',
+        field     => 'Distance from Kimmel Center in Philadelphia',
+        value     => $distance,
+        docs      => \@docs,
     );
 }
 

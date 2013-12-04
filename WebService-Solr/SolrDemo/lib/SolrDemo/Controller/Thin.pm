@@ -66,10 +66,10 @@ sub realquery : Local : Args(2) {
         { rows => 10000 } );
     my @docs = $response->docs;
     $c->stash(
-        template => 'results.tt',
-        field    => $fieldname,
-        value    => $fieldvalue,
-        docs     => \@docs
+        template  => 'results.tt',
+        field     => $fieldname,
+        value     => $fieldvalue,
+        docs      => \@docs,
     );
 }
 

@@ -3,6 +3,9 @@ package SolrDemo::Model::Solr;
 use WebService::Solr;
 use WebService::Solr::Query;
 use namespace::autoclean;
+use WebService::Solr::Field ;
+use WebService::Solr::Document ;
+#use Carp::Always;
 
 use parent 'Catalyst::Model';
 
@@ -31,6 +34,34 @@ sub Kimmel {
     my %options      = ( rows => 100, fq => $geofilt );
     my $response     = $SOLR->search( $mainquery, \%options );
     return $response->docs;
+}
+
+sub Delete {
+    my $self      = shift;
+    my $params    = shift;
+    # If the query isn't forcibly stringified an exception may be thrown.
+    my $query = sprintf( "%s", WebService::Solr::Query->new($params) );
+    my $result = $SOLR->delete_by_query( $query ) ;    
+    return $result ;
+}
+
+sub Add {
+    my $self      = shift;
+    my $params    = shift;
+    my @fields_array = () ;
+    for ( keys %{$params} ) { 
+			my $F = WebService::Solr::Field->new( $_ => $params->{$_} ) || next ;
+			push @fields_array, ($f) ;
+		}
+	my $newdoc = WebService::Solr::Document->new( \@fields_array ) || die "cant newdoc $!";
+#	my $newdoc = WebService::Solr::Document->new( $params ) || die "$!";	
+return $newdoc->value_for( 'id' ) ;	
+	my $result = $SOLR->add( $newdoc ) ;
+	
+    # If the query isn't forcibly stringified an exception may be thrown.
+#    my $query = sprintf( "%s", WebService::Solr::Query->new($params) );
+    #my $result = $SOLR->delete_by_query( $query ) ;    
+   return $result ;
 }
 
 1;

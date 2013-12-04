@@ -1,5 +1,5 @@
 <h1>Catalyst SolrDemo</h1>
-<h2>Docs in this query [% doc_count %]</h2>
+<h2>Docs in this query [% docs.list.size %]</h2>
 <h3>Field [% field %] value [%value %]</h3>
 <table>
 [% FOREACH doc IN docs %]
