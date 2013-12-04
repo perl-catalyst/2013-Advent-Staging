@@ -17,14 +17,14 @@ use Catalyst::Runtime 5.80;
 #                 directory
 
 use Catalyst qw/
-    -Debug
-    ConfigLoader
-    Static::Simple
-/;
+  -Debug
+  ConfigLoader
+  Static::Simple
+  /;
 
 extends 'Catalyst';
 
-our $VERSION = '0.01';
+our $VERSION = '1.00';
 
 # Configure the application.
 #
@@ -37,35 +37,20 @@ our $VERSION = '0.01';
 
 __PACKAGE__->config(
     name => 'SolrDemo',
+
     # Disable deprecated behavior needed by old applications
     disable_component_resolution_regex_fallback => 1,
-    enable_catalyst_header => 1, # Send X-Catalyst header
-    encoding => 'utf8', # prevents wide character explosions
-    'View::HTML' => {  #Set the location for TT files        
-         INCLUDE_PATH => [ SolrDemo->path_to( 'root' ), ], },    
+    enable_catalyst_header                      => 1,   # Send X-Catalyst header
+    encoding     => 'utf8',    # prevents wide character explosions
+    'View::HTML' => {          #Set the location for TT files
+        INCLUDE_PATH => [ SolrDemo->path_to('root'), ],
+    },
 );
-
 
 # Start the application
 __PACKAGE__->setup();
 
 =encoding utf8
-
-=head1 NAME
-
-SolrDemo - Catalyst based application
-
-=head1 SYNOPSIS
-
-    script/solrdemo_server.pl
-
-=head1 DESCRIPTION
-
-[enter your description here]
-
-=head1 SEE ALSO
-
-L<SolrDemo::Controller::Root>, L<Catalyst>
 
 =head1 AUTHOR
 

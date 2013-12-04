@@ -1,4 +1,4 @@
-package SolrDemo::Model::MSolr;
+package SolrDemo::Model::SolrModelSolr;
 
 use WebService::Solr ;
 use WebService::Solr::Query;

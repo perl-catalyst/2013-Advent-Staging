@@ -1,0 +1,10 @@
+<h1>Catalyst SolrDemo</h1>
+<h2>Docs in this query [% doc_count %]</h2>
+<table>
+[% FOREACH doc IN docs %]
+
+[% FOREACH fieldname IN doc.field_names %]
+<tr><td>[% doc.value_for( fieldname ) %]</td></tr>
+[% END %]
+[% END %]
+</table>

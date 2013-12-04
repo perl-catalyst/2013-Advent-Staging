@@ -48,7 +48,7 @@ Create A Project
 
  catalyst.pl SolrDemo
  cd SolrDemo
- ./script/solremo_create.pl view HTML TT
+ ./script/solrdemo_create.pl view HTML TT
  
 Edit the SolrDemo.conf files
 
@@ -70,6 +70,7 @@ Create the files we'll need
 
  touch lib/SolrDemo/Model/Solr.pm
  touch lib/SolrDemo/Model/SolrModelSolr.pm
+ touch lib/SolrDemo/Model/Solr/Fat.pm 
  touch lib/SolrDemo/Controller/Thin.pm 
  touch t/model_solr.t
  
@@ -108,7 +109,7 @@ File: lib/SolrDemo/Controller/Thin.pm
 
     sub dump :Local :Args(0) {
         my ( $self, $c ) = @_;
-        my $response   = $c->model('MSolr')->search(
+        my $response   = $c->model('SolrModelSolr')->search(
             WebService::Solr::Query->new( { '*' => \'*' } ),
             { rows => 10000 } 
             );
@@ -120,7 +121,7 @@ File: lib/SolrDemo/Controller/Thin.pm
 
     sub select :Local :Args(0) {
         my ( $self, $c ) = @_;
-        my $response   = $c->model('MSolr')->search(
+        my $response   = $c->model('SolrModelSolr')->search(
             WebService::Solr::Query->new( 
                 { text => ['hard drive'] } ), { rows => 10000 } );        
         my $pre = &response2info($response);
@@ -150,7 +151,7 @@ Add the following method to Thin.pm
     sub maxtor :Local :Args(0) {
         my ( $self, $c ) = @_;
         my $maxq = WebService::Solr::Query->new({ manu => ['maxtor'] });
-        my $response   = $c->model('MSolr')->search(
+        my $response   = $c->model('SolrModelSolr')->search(
             WebService::Solr::Query->new( 
                 { text => ['hard drive'] } ), 
                 { rows => 10000, fq => $maxq } );        
@@ -158,11 +159,31 @@ Add the following method to Thin.pm
         $c->response->body("<pre>$pre </pre>");
     } 
     
-As you add options to your queries you are going to have more and more of this code in your controllers. You may also have additional logic to convert user input into queries. Living in a controller this code will become hard to test and it will clutter your controllers.     
+=head3 a real search
+
+Add this method to Thin.pm
+
+...
+
+Try: http://localhost:3000/thin/realquery/text/ipod  http://localhost:3000/thin/realquery/features/cache http://localhost:3000/thin/realquery/manu/maxtor
+
+First the model returns a WebService::Solr::Response object, we use the docs method to extract an array of WebService::Solr::Document objects from it which are then passed by reference to the view. The view iterates the array and uses the C<fieldnames> method to get a list of the fields in that document (not all documents in the test data have the same fields) and then iterates through it finally retrieving individual fields with the C<value_for method>.
+
+=head1 Moving to a Fat Model
+
+My search queries typically require a lot of supporting code, which is easier to test in a model than a controller, and is generally more appropriate to the model. Unlike DBI based models which maintain a connection, each request to solr is completely independent of all others and no connection is maintained between them, so instantiating a new WebService::Solr object is relatively trivial, additionally if you work with multiple collections you need to create a seperate object for each one. Because I write my models from test, I'm going to show a test before using the model in a controller.
+
+lib/SolrDemo/Model/Solr.pm
+
+....
+
+t/model_solr.t
+
+...
+
+lib/SolrDemo/Controller/Fat.pm
 
 
-
- 
  =head1 $SECTIONS
 
 As many sections as neeed to complete the article!
