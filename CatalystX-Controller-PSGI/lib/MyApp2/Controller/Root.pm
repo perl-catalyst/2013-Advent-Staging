@@ -8,37 +8,24 @@ __PACKAGE__->config(namespace => '');
 
 use Plack::Response;
 
-use Legacy::App;
-use Legacy::DB;
+with 'Catalyst::Component::InstancePerContext';
 
-has "_db" => (
-    is      => 'ro',
-    builder => '_build_db',
-    lazy    => 1,
+has 'c' => (
+    is  => 'rw',
 );
-sub _build_db {
-    my $self = shift;
-    return Legacy::DB->new(
-        dbspec  => "legacy",
-        region  => "en",
-    );
-}
 
-has "_legacy_app" => (
-    is      => "ro",
-    builder => "_build_legacy_app",
-    lazy    => 1,
-);
-sub _build_legacy_app {
-    my $self = shift;
-    return Legacy::App->new(
-        db      => $self->_db,
+sub build_per_context_instance {
+    my ( $self, $c ) = @_;
+
+    return $self->new(
+        %{ $self->config },
+        c => $c,
     );
 }
 
 my $legacy_app_wrapper = sub {
     my ( $self, $env ) = @_;
-    my ( $status, $body ) = $self->_legacy_app->handle_request( $env->{PATH_INFO} );
+    my ( $status, $body ) = $self->c->model('LegacyApp')->handle_request( $env->{PATH_INFO} );
 
     my $res = Plack::Response->new( $status );
     $res->content_type('text/html');
@@ -50,7 +37,7 @@ my $legacy_app_wrapper = sub {
 __PACKAGE__->mount( 'some/action'   => $legacy_app_wrapper );
 __PACKAGE__->mount( 'foo'           => $legacy_app_wrapper );
 
-sub default: Local{
+sub default: Private {
     my ( $self, $c ) = @_;
 
     $c->res->body('not found');

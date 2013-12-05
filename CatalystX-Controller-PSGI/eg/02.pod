@@ -15,15 +15,6 @@ Models, and passing them back to the legacy app at startup
 
 Read L<Part 1|http://www.catalystframework.org/calendar/2013/16> first
 
-Note, I'll be using a copy of MyApp, called MyApp2, for the purpose of preserving
-the part 1 code.
-
-=head1 The Aim
-
-Expand our existing app so that it's more Catalyst than legacy app, we'll do this
-by replacing legacy.psgi with inline code, loading our legacy perl modules as
-Catalyst Models and using the ACCEPT_CONTEXT hook to pass them to the legacy app.
-
 =head1 The Code
 
 We'll start by inlining our legacy app.
@@ -123,8 +114,8 @@ and the /some/other/action handler, since we've replaced that.
 There's a lot going on there, and we can split it up further, lets do some
 cleaning and add a Cataylst 404 handler, aka the default action
 
-A good thing to note with mount is that as well as $env being passed in, $self
-is aswell, meaning we can set attributes for the legacy_app and db
+A good thing to note with mount is that $self is passed into the app, as well
+$env, meaning we can set Moose attributes for the legacy_app and db
 
     use Legacy::App;
     use Legacy::DB;
@@ -168,14 +159,134 @@ is aswell, meaning we can set attributes for the legacy_app and db
     __PACKAGE__->mount( 'some/action'   => $legacy_app_wrapper );
     __PACKAGE__->mount( 'foo'           => $legacy_app_wrapper );
 
-    sub default: Local{
+    sub default: Private {
         my ( $self, $c ) = @_;
 
         $c->res->body('not found');
         $c->res->status(404);
     }
 
+Nice, we've now got a tidy controller. A very fat controller though, and fat
+controllers are bad, we want thin controllers, and fat models, let's see what
+we can do about that.
+
+So the first thing we should do is create a model for the db, we'll use
+L<Catalyst::Model::Adaptor> to wrap our module. So create the file
+I<MyApp/lib/MyApp/Model/DB.pm>
+
+    package MyApp::Model::DB;
+    use strict;
+    use warnings;
+
+    use base 'Catalyst::Model::Adaptor';
+
+    __PACKAGE__->config(
+        class   => 'Legacy::DB',
+        args    => {
+            dbspec  => "legacy",
+            region  => "en",
+        },
+    );
+
+    sub mangle_arguments {
+        my ( $self, $args ) = @_;
+        return %$args;
+    }
+
+    1;
+
+and I<MyApp/lib/MyApp/Model/LegacyApp.pm>
+
+    package MyApp::Model::LegacyApp;
+    use strict;
+    use warnings;
+
+    use base 'Catalyst::Model::Adaptor';
+
+    __PACKAGE__->config(
+        class   => 'Legacy::App',
+    );
+
+    sub prepare_arguments {
+        my ( $self, $app ) = @_;
+
+        # this is fine as long as DB doesn't change, if it does you should use
+        # Catalyst::Model::Factory::PerRequest
+        return {
+            db  => $app->model('DB'),
+        };
+    }
+
+    sub mangle_arguments {
+        my ( $self, $args ) = @_;
+        return %$args;
+    }
+
+    1;
+
+Notice how we had to mangle_arguments, that's because our legacy app expects
+a hash to ->new, and not a hashref. And for LegacyApp we use prepare_arguments
+to setup db, that's because we needed to access the Catalyst model, and this way
+we can pass it in nice and cleanly.
+
+Sweet, now that's done we can tidy up the controller even more.
+
+    my $legacy_app_wrapper = sub {
+        my ( $self, $env ) = @_;
+        my ( $status, $body ) = $self->c->model('LegacyApp')->handle_request( $env->{PATH_INFO} );
+
+        my $res = Plack::Response->new( $status );
+        $res->content_type('text/html');
+        $res->body( $body );
+
+        return $res->finalize;
+    };
+
+    __PACKAGE__->mount( 'some/action'   => $legacy_app_wrapper );
+    __PACKAGE__->mount( 'foo'           => $legacy_app_wrapper );
+
+    sub default: Private {
+        my ( $self, $c ) = @_;
+
+        $c->res->body('not found');
+        $c->res->status(404);
+    }
+
+But wait, where does this $self->c come from? How are we going to get from a
+controller to the context? Enter L<Catalyst::Component::InstancePerContext>
+
+    with 'Catalyst::Component::InstancePerContext';
+
+    has 'c' => (
+        is  => 'rw',
+    );
+
+    sub build_per_context_instance{
+        my ( $self, $c ) = @_;
+
+        return $self->new(
+            %{ $self->config },
+            c => $c,
+        );
+    }
+
+What we're doing here is creating a new copy of the controller for each request
+and stashing the Catalyst context object in $self->c. We could use ACCEPT_CONTEXT
+or even COMPONENT, since we only need access to c->model, but a lot can go wrong,
+and better to be safe than sorry.
+
+Now our controller is pretty thin, and our legacy code has been converted into
+Catalyst Models, and we can get on making our website, only now we have the power
+and flexibility of Catalyst behind us, and one day we won't even need that legacy
+code at all.
+
 =head1 Summary
+
+You can see the code for part 1 and 2 at L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/CatalystX-Controller-PSGI>
+
+Part 1 is Myapp, part 2 is MyApp2.
+
+Hope this has been of use, and in the meantime, Relax, don't worry, have a homebrew.
 
 =head1 Author
 
