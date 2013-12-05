@@ -42,26 +42,43 @@ sub Delete {
     # If the query isn't forcibly stringified an exception may be thrown.
     my $query = sprintf( "%s", WebService::Solr::Query->new($params) );
     my $result = $SOLR->delete_by_query( $query ) ;    
+ #   $SOLR->commit() ;
     return $result ;
 }
+
+=pod
+my @fields = (
+    [ id     => 1,               { boost => 1.6 } ],
+    [ sku    => 'A6B9A',         { boost => '1.0' } ],
+    [ manu   => 'The Bird Book', { boost => '7.1' } ],
+    [ weight => '4.0',           { boost => 3.2 } ],
+    [ name   => 'Sally Jesse Raphael' ],
+);
+=cut
 
 sub Add {
     my $self      = shift;
     my $params    = shift;
+    my $boost     = shift;
     my @fields_array = () ;
-    for ( keys %{$params} ) { 
-			my $F = WebService::Solr::Field->new( $_ => $params->{$_} ) || next ;
-			push @fields_array, ($f) ;
+    foreach my $k ( keys %{$params} ) { 
+			my @fields = ( $k, $params->{ $k } );
+			if ( $boost->{ $k } ) { 
+					push @fields, ( { boost => $boost->{ $k } } ) } 
+			push @fields_array, ( \@fields ) ;
 		}
-	my $newdoc = WebService::Solr::Document->new( \@fields_array ) || die "cant newdoc $!";
-#	my $newdoc = WebService::Solr::Document->new( $params ) || die "$!";	
-return $newdoc->value_for( 'id' ) ;	
-	my $result = $SOLR->add( $newdoc ) ;
+	my $doc = WebService::Solr::Document->new( @fields_array ) || die "cant newdoc $!";
+
+#return $newdoc->value_for( 'id' ) ;	
+	my $result = $SOLR->add( $doc ) ;
 	
     # If the query isn't forcibly stringified an exception may be thrown.
 #    my $query = sprintf( "%s", WebService::Solr::Query->new($params) );
     #my $result = $SOLR->delete_by_query( $query ) ;    
+   
+ #  $SOLR->commit() ;
    return $result ;
 }
+
 
 1;

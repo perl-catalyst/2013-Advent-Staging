@@ -18,8 +18,8 @@ sub realquery : Local : Args(2) {
 
 sub nearkimmel : Local : Args() {
     my ( $self, $c ) = @_;
-    my $distance = 500;
-    my @docs     = $c->model('Solr')->Kimmel(500);
+    my $distance = 1600;
+    my @docs     = $c->model('Solr')->Kimmel( $distance );
     $c->stash(
         template  => 'results.tt',
         field     => 'Distance from Kimmel Center in Philadelphia',
