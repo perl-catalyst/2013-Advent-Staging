@@ -1,8 +1,8 @@
-package MyApp::Controller::Some;
+package MyApp2::Controller::Some;
 use Moose;
 use namespace::autoclean;
 
-BEGIN { extends 'Catalyst::Controller' };
+BEGIN { extends 'CatalystX::Controller::PSGI' };
 
 sub other_action: Path('other/action') {
     my ( $self, $c ) = @_;
