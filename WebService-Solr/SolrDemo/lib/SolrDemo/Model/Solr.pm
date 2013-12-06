@@ -2,10 +2,9 @@ package SolrDemo::Model::Solr;
 
 use WebService::Solr;
 use WebService::Solr::Query;
-use namespace::autoclean;
 use WebService::Solr::Field ;
 use WebService::Solr::Document ;
-#use Carp::Always;
+use namespace::autoclean;
 
 use parent 'Catalyst::Model';
 
@@ -40,8 +39,8 @@ sub Delete {
     my $self      = shift;
     my $params    = shift;
     # If the query isn't forcibly stringified an exception may be thrown.
-    my $query = sprintf( "%s", WebService::Solr::Query->new($params) );
-    my $result = $SOLR->delete_by_query( $query ) ;
+    my $result = $SOLR->delete_by_query( 
+        sprintf( "%s", WebService::Solr::Query->new($params) ) ) ;
     return $result ;
 }
 

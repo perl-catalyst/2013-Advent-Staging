@@ -1,6 +1,5 @@
 package SolrDemo::Controller::Fat;
 use namespace::autoclean;
-use WebService::Solr::Query;
 use Moose;
 
 BEGIN { extends 'Catalyst::Controller' }
