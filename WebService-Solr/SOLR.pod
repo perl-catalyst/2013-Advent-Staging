@@ -75,7 +75,14 @@ Create the additional files we'll need
  touch lib/SolrDemo/Controller/Thin.pm 
  touch root/results.tt
  touch t/model_solr.t
- 
+
+In addition I recommend creating a reset script in the example/exampledocs folder of the solr distribution. This script will delete your collection and replace it with the sample docs when you are testing CRUD operations. 
+
+ #!/bin/bash
+ wget "http://localhost:8983/solr/update?stream.body=<delete><query>*:*</query><
+ wget "http://localhost:8983/solr/update?stream.body=<commit/>" -O /dev/null
+ ./post.sh *.xml
+
 =head1 A Thin Model with Catalyst::Model::WebService::Solr
 
 File: lib/SolrDemo/Controller/Thin.pm 
@@ -145,7 +152,7 @@ Executes a query for all records in the solr database. Notice that we need WebSe
 
 =head3 select
 
-This select query is hard coded to find items matching the phrase 'hard drive', which, we see from the spew, gets translated as 'hard+drive'. Here we specified the field text (which is a catch-all field defined to hold everything searchable) and passed an array ref to the list of values. If you copy and rename the method and then change the field list to C<['hard drive','maxtor']>, you will find that you still get the same 2 records, this is because of solr's matching behaviour. If you want to filter for only maxtor hard drives you'll need to use a filter query which is specified in the options.
+This select query is hard coded to find items matching the phrase 'hard drive', which, we see from the spew, gets translated as 'hard+drive'. Here we specified the field text (which is a catch-all field defined to hold everything searchable) and passed an array ref to the list of values. If you copy and rename the method and then change the field list to C<['hard drive','maxtor']>, you will find that you still get the same 2 records, this is because of solr's matching behaviour. If you want to filter for only maxtor hard drives you'll need to use a filter query (fq) which is specified in the options.
 
 Add the following method to Thin.pm
 
@@ -242,8 +249,7 @@ lib/SolrDemo/Model/Solr.pm
 
 t/model_solr.t
 
-    use Test::More;         
-                    
+    use Test::More;
     BEGIN { use_ok 'SolrDemo' }
 
     my $C = SolrDemo->new ;
@@ -294,19 +300,128 @@ lib/SolrDemo/Controller/Fat.pm
 
     1;
 
-Because I write my models from test, I'm going to test test two public and 1 private methods first. The private method generates a geofilter string, because that isn't currently implemented in WebService::Solr, but I've proposed it for a future release. In the fat model I it is easy to directly test possible queries against my code. I've written two methods, the first (realquery) does exactly the same as the method in the thin controller. It takes a few more lines in the fat model because I feel less urgency to be terse, and I find it easier to pick apart the bits of a complex query when each piece is sitting in its own variable. The second method (Kimmel) uses a geofilter to find the number of items within 500km of the Kimmel Center in Philadelphia. Finally with the models tested the methods are accessed by a Controller.
+The Model contains 3 methods. The private method generates a geofilter string, because that isn't currently implemented in WebService::Solr, but I've proposed it for a future release. Of the other two methods the first replicates the realquery we used in the thin model and the third finds things near the Kimmel Center in Philadelphia as an example of geospatial search.
 
-=head2 Add, Update, and Delete 
+You should now be able to run the tests, and if they work when you run the test server, /fat/realquery/?/? will work as it did in the thin model, and /fat/nearkimmel will show you the results of the geospatial filter.
 
+=head2 Adding, Updating, and Deleting
 
+We're now going to add a record, modify it, and then delete it. I'm only going to use tests in the demonstration to avoid any controller or view code. 
+
+Add and Update are the same method. When a document is added with the same id as an existing document solr replaces the original record with the new one. This means whenever we update a record we need to send the entire new version. Two methods get added to the model, Delete and Add (which is also the update method). Both methods normally return a value of B<1>, which is the value normally returned by the underlying WebService::Solr method, which in turn is determined by Solr's response, which is not necessarily an indicator that what you intended to happen is what happened. 
+
+=head2 Add
+
+The Add method takes a hashref of fieldnames and values which it uses to create a WebService::Solr Document. There is an optional parameter to the WebService::Solr->add method for setting boost values on fields, the Add method of our Model does not implement it. 
+
+=head2 Delete
+
+Delete takes a hashref that is used to construct a query. If we use { id => $VALUE } we will delete one record. A careless query could delete a lot of records, as the last test shows { cat => 'electronics' } will delete half of our records! After you run the last test you will need to reset your data using the script you created earlier for that purpose. The sprintf statement is in the method because when the output of WebService::Solr::Query is directly fed to the delete method the delete method may mistake it for an object
+
+Add to Solr.pm Model
+
+    sub Add {
+        my $self      = shift;
+        my $params    = shift;
+        my @fields_array = () ;
+        foreach my $k ( keys %{$params} ) { 
+                my @fields = ( $k, $params->{ $k } );
+                push @fields_array, ( \@fields ) ;
+            }
+        my $doc = WebService::Solr::Document->new( @fields_array ) || die "cant newdoc $!";
+        my $result = $SOLR->add( $doc ) ;
+        return $result ;
+    }
+
+    sub Delete {
+        my $self      = shift;
+        my $params    = shift;
+        # If the query isn't forcibly stringified an exception may be thrown.
+        my $query = sprintf( "%s", WebService::Solr::Query->new($params) );
+        my $result = $SOLR->delete_by_query( $query ) ;
+        return $result ;
+    }
+
+Add to t/model_solr.t immediately above done_testing
+
+    note( "\n* CRUD Tests *\n" );
+    my $added1 = $C->model('Solr')->Add(
+        {
+            name     => 'Zune Player',
+            manu     => 'Microsoft',
+            features => 'Truly Obsolete',
+            price    => '300',
+            store    => '40.76,-73.98',
+            cat      => 'electronics',
+            id       => 'MSZUNE'
+        }
+    );
+    is( $added1, 1,
+        'successfully added a zune located at Carnegie Hall to inventory' );
+
+    my @docs3 = $C->model('Solr')->Kimmel(1600);
+
+    is( scalar(@docs3), 4,
+        'There are now 4 items within 1600 km of the Kimmel Center' );
+
+    # a subroutine to list a doc.
+    sub listdoc {
+        my $d      = shift;
+        my $string = '';
+        $string .=
+            ' ID: '
+        . $d->value_for('id') . ' -- '
+        . $d->value_for('name')
+        . ' Manu: '
+        . $d->value_for('manu') . "\n\t"
+        . $d->value_for('features');
+        return $string;
+    }
+
+    note( '* Display the 4 items within 1600km showing added record *');
+    for (@docs3) { note( &listdoc($_) ) }
+
+    my $updated1 = $C->model('Solr')->Add(
+        {
+            name     => 'Zune Player',
+            manu     => 'Microsoft',
+            features => 'Half price Closeout Sale on our last MS ZUNE! Save $150',
+            price    => '150',
+            store    => '40.76,-73.98',
+            cat      => 'electronics',
+            id       => 'MSZUNE'
+        }
+    );
+
+    is( $updated1, 1, 'Updated the Zune for Closeout!' );
+
+    my @zunedocs = $C->model('Solr')->List( { id => 'MSZUNE' } );
+    my $zunedoc = $zunedocs[0];
+    is( $zunedoc->value_for('price'), 150, 'Prove that zune now costs $150' );
+
+    note( '* Display the Documents showing modified record for ZUNE. *');
+    @docs3 = $C->model('Solr')->Kimmel(1600);
+    for (@docs3) { note( &listdoc($_) ) }
+
+    my $delete1 = $C->model('Solr')->Delete( { id => 'MSZUNE' } );
+    is( $delete1, 1, 'delete returned success' );
+    @zunedocs = $C->model('Solr')->List( { id => 'MSZUNE' } );
+    is( scalar( @zunedocs ) , 0, 'Confirm it is deleted' );
+
+    # This test deletes data, after running it you must reset your data
+    # Comment it or skip it to avoid.
+    my @before = $C->model('Solr')->List( { '*' => \'*' } );
+    my $delete2 = $C->model('Solr')->Delete( { cat => 'electronics' } );
+    my @after = $C->model('Solr')->List( { '*' => \'*' } );
+    is( scalar(@after) , 18, "There were 32 documents, there are now 18");
 
 =head1 For More Information
 
-After following this how-to document you'll want to read the WebService::Solr Documentation. It is organized by sub-module so you probably need to read through it several times to fit everything together. 
+After following this how-to document you'll want to read the WebService::Solr Documentation. It is organized by sub-module so you'll have to read all of the pieces, plus the tests from the distribution which are where you'll find code examples. 
 
 =head1 Summary
 
-In this article we created both Thin and Fat Models for SOLR and wrote a few tests for our Fat Model. 
+In this article we created both Thin and Fat Models for WebService::Solr. For the Fat Model we also Created, Updated, and Destroyed data, and wrote tests for everything we did.
 
 =head1 Author
 
