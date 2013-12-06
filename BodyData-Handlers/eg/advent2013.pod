@@ -75,8 +75,8 @@ go.  Please note this might not be the best approach if the incoming JSON
 is expected to be very large!
 
 Your hashref under C<data_handlers> can include as many types as you deem
-required, and you can override the build in JSON parsing since we apply
-you customizations ontop of the defaults.
+required, and you can override the built in JSON parsing since we apply
+your customizations ontop of the defaults.
 
 So, how do you access this new parsed content?  We've added a new attributes
 to L<Catalyst::Request> called C<body_data>.  This attribute is lazy, so
@@ -85,12 +85,12 @@ against the defined L<data_handlers>.  So if you wrote a ton of your own
 JSON decoding stuff, and/or are using L<Catalyst::Action::REST> you can
 keep on doing that without any impact at all on your request overhead.
 
-Here's how this could look in you controller.  Lets assume the incoming is
+Here's how this could look in your controller.  Lets assume the incoming is
 C<application/json> like "{'name':'Jason','age':'25'}":
 
     sub update_user : POST Path(/User) Consumes(JSON) {
       my $p = (my $c = pop)->req->body_data;
-      $c->res->body("My name is $posted->{name} and my age is $p->{age}");
+      $c->res->body("My name is $p->{name} and my age is $p->{age}");
     }
 
 Basically this is very similar to the request object's C<body_parameters>
