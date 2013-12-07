@@ -3,11 +3,13 @@ package MyApp::Stream;
 use Moose;
 use AnyEvent::AIO;
 use IO::AIO;
+use Try::Tiny;
 
 has 'writer' => (
   is => 'bare',
   required => 1,
   handles => ['write', 'close']);
+
 
 has 'path' => (is=>'ro', required=>1);
 
@@ -26,7 +28,11 @@ sub read_chunk {
     my $status = shift;
     die "read error[$status]: $!" unless $status >= 0;
     if($status) {
-      $self->write($buffer);
+      try {
+        $self->write($buffer);
+      } catch {
+        warn $_;
+      };
       $self->read_chunk($fh, ($offset + 65536));
     } else {
       $self->close;

@@ -1,6 +1,6 @@
 =head1 Title
 
-Dealing with funny IO::Handle type objects in Catalyst Response
+Dealing with funny L<IO::Handle> type objects in Catalyst Response
 
 =head1 Overview
 
@@ -246,7 +246,8 @@ response to the filetest -s to do what we want.
   use namespace::sweep;
 
   use overload
-    '-X' => \%myFileTest;
+    'bool'  => sub { 1 },
+    '-X'    => \%myFileTest;
 
   has '_content' => ( is => 'ro' );
 
@@ -462,6 +463,23 @@ produced warning that content_length has not been set
 
   -s on unopened filehandle
 
-=head1 SUMMARY
+=head1 A Full Example
 
-=head1 AUTHOR
+See the example application:
+
+L<https://github.com/snakierten96/2013-Advent-Staging/tree/master/MyApp-FunnyIO-Web>
+
+=head1 Summary
+
+So by now we should have covered a little bit more on how L<Catalyst> handles
+L<IO::Handle> type objects in the request body and how we can alter the 
+behaviour of any such class to play nicely with what L<Catalyst> expects. I
+also hope this shows an approach of seperating any domain logic from the 
+controller and use the model system instead to call in your implementation 
+classes.
+
+=head1 Author
+
+Neil Lunn L<email:neil@mylunn.id.au>
+
+=cut
