@@ -1,0 +1,5 @@
+---
+name: 'MyApp::FunnyIO'
+log: 'myapp_funnyio.l4p'
+#Model::FunnyIO:
+#  class: IO::Uncompress::Gunzip
