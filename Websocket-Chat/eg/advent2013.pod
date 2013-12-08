@@ -2,12 +2,280 @@
 
 =head1 Overview
 
+Following up on our Websockets Echo example lets build a basic and functional
+multiuser chat application.
+
 =head1 Introduction
+
+The main claim to fame (AFAIK) for Websockets is in how it makes it much easier
+to keep a persistent, bi-directional connection open between a client (like a
+web browser) and a server.  The low overhead, low latency websocket is ideal for
+applications where you want to let lots of people interact in near real time.
+One such application could be a multiuser chat application, similar to IRC.
+
+Although in theory one could build such a system on top of a blocking server
+such as L<Starman>, you'd be limited in the number of allowed persistent
+connections.  As you might recall from earlier articles, a blocking server
+can only be simultaneously connected to a number of clients which is equal to
+its number of workers (be they forked or threaded).  As a result it is common
+to build persistent, websocket based applications on top of a non blocking
+server, managed by an event loop (such as L<AnyEvent> and L<Twiggy>).  In this
+example we will use that approach.
+
+=head1 Scope
+
+A true multiuser chat would need significantly more security hardening than this
+example will show.  There's no reason you could not build such security on top
+of existing tools in the L<Catalyst> ecosystem.  We will keep it simple for the
+purposes of demostration!
+
+=head1 The Code
+
+Although I usually try to break my model down more carefully, sometimes for
+prototyping, or for build a proof of concept, I make uber controllers.  Since
+all L<Catalyst::Controller>s play nice with L<Moose> this makes it easy to
+build some simple models and attributes on your controller.  Once you nail
+down the API, you have start to refactor code more correctly.  But it makes
+a nice first draft!
+
+Let's look at the first part of the controller:
+
+    package MyApp::Controller::Root;
+
+    use Moose;
+    use MooseX::MethodAttributes;
+    use AnyEvent::Handle;
+    use Protocol::WebSocket::Handshake::Server;
+    use Protocol::WebSocket::Frame;
+    use JSON;
+
+    extends 'Catalyst::Controller';
+
+    has 'history' => (
+      is => 'bare',
+      traits => ['Array'],
+      isa  => 'ArrayRef[HashRef]',
+      default => sub { +[] },
+      handles => {
+        history => 'elements',
+        add_to_history => 'push'});
+
+    has 'clients' => (
+      is => 'bare',
+      traits => ['Array'],
+      default => sub { +[] },
+      handles => {
+        clients => 'elements',
+        add_client => 'push'});
+
+So the start is all the bits we are pulling in from CPAN to get the job done
+and we set this class up to be a L<Catalyst::Controller>.  We then create two
+attributes to hold the two basic models for this chat application.  The first
+one is the history of the chat, which will be an arrayref of user => message:
+
+    [
+      { john => 'Hello bob' },
+      { bob => 'Hey john' },
+      ...
+    ]
+
+The send is a arrayref of the connected clients.  Ultimately as you will see
+this is an arrayref of handles to the websocket.
+
+Since we are going to run this under a single process server, we get away with
+creating a model like this.  Controllers are typically singletons associated
+with the application.  So when runing under a single process server these
+attributes are always going to be available.  If you ran this under a forking
+server, each child in the fork would have its own copy.  In that case you'd
+need to save everything to a share storage, such as a database.
+
+Lets look at an action:
+
+    sub index :Path(/) {
+      my ($self, $c) = @_;
+      (my $url = $c->uri_for_action($self->action_for('ws')))
+        ->scheme('ws');
+
+      $c->stash(websocket_url => $url);
+      $c->forward($c->view('HTML'));
+    }
+
+So this is going to be the root page.  We just create a single link to what is
+going to be the websocket URL and pass on to the view.  Lets see the view
+template:
+
+    <!DOCTYPE html>
+    <html lang="en" ng-app>
+      <head>
+        <title>Example Chat Server</title>
+        <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.1.4/angular.min.js"></script>
+        <script>
+          function ChatCtrl($scope) {
+
+            $scope.status = "Disconnected";
+            $scope.username = "";
+            $scope.socket = "";
+            $scope.checked = 1;
+            $scope.history = new Array;
+
+            $scope.join = function() {
+              socket = new WebSocket('[% websocket_url %]');
+
+              socket.addEventListener("open", function(event) {
+                $scope.$apply(function() {
+                  $scope.status = "Connected";
+                  $scope.checked = 0;
+                  $scope.username = $scope.new_username;
+                  socket.send(
+                    angular.toJson({new: $scope.new_username})
+                  );
+                });
+              });
+
+              socket.addEventListener("close", function(event) {
+                $scope.$apply(function() {
+                  $scope.status = "Disconnected";
+                });
+              });
+
+              socket.addEventListener("message", function(event) {
+                $scope.$apply(function() {
+                  $scope.history.push(JSON.parse(event.data));
+                });
+              });
+
+              $scope.socket = socket;
+            };
+
+            $scope.send = function () {
+              $scope.socket.send(
+              angular.toJson({
+                username: $scope.username,
+                message: $scope.message}));
+
+              $scope.message = '';
+            }
+          }
+        </script>
+      </head>
+      <body ng-controller="ChatCtrl">
+        <h1>The Chatroom Example</h1>
+        <ul id="history">
+          <li ng-repeat="item in history">
+            <span ng-bind="item.username"></span>: 
+            <span ng-bind="item.message"></span>
+          </li>
+        </ul>
+        <div>
+          Total Items: <span id="item-count" ng-bind="history.length"></span>
+        </div>
+        <div id="chatbox">
+          Status: <span id="status" ng-bind="status"></span><br />
+
+          <div ng-show="checked">
+            <input id="join" type="button" value="Join" ng-click="join()" />&nbsp;
+            <input id="new_username" ng-model="new_username" /><br />
+          </div>
+          <div ng-hide="checked">  
+            <input id="send" type="button" value="Send" ng-click="send()" />&nbsp;
+            <input id="text" ng-model="message" /><br />
+          </div>
+        </div>
+      </body>
+    </html>
+
+We're using angular.js, which is Javascript framework that makes is easy to
+do you user interface work in a more model-view-controller manner.  There's
+view template with 
+
+To see it all at once, here's the full controller all together:
+
+    package MyApp::Controller::Root;
+
+    use Moose;
+    use MooseX::MethodAttributes;
+    use AnyEvent::Handle;
+    use Protocol::WebSocket::Handshake::Server;
+    use Protocol::WebSocket::Frame;
+    use JSON;
+
+    extends 'Catalyst::Controller';
+
+    has 'history' => (
+      is => 'bare',
+      traits => ['Array'],
+      isa  => 'ArrayRef[HashRef]',
+      default => sub { +[] },
+      handles => {
+        history => 'elements',
+        add_to_history => 'push'});
+
+    has 'clients' => (
+      is => 'bare',
+      traits => ['Array'],
+      default => sub { +[] },
+      handles => {
+        clients => 'elements',
+        add_client => 'push'});
+
+
+    sub index :Path(/) {
+      my ($self, $c) = @_;
+      (my $url = $c->uri_for_action($self->action_for('ws')))
+        ->scheme('ws');
+
+      $c->stash(websocket_url => $url);
+      $c->forward($c->view('HTML'));
+    }
+
+    sub ws :Path(/ws) {
+      my ($self, $ctx) = @_;
+      my $hs = Protocol::WebSocket::Handshake::Server->new_from_psgi($ctx->req->env);
+      my $hd = AnyEvent::Handle->new(
+        fh => $ctx->req->io_fh,
+        on_error => sub { warn "Error ".pop });
+
+      $hs->parse($hd->fh);
+      $hd->push_write($hs->to_string);
+      $hd->on_read(sub {
+        (my $frame = $hs->build_frame)->append($_[0]->rbuf);
+        while (my $message = $frame->next) {
+          my $decoded = decode_json $message;
+          if(my $user = $decoded->{new}) {
+            $decoded = {username=>$user, message=>"Joined!"};
+            foreach my $item ($self->history) {
+              $hd->push_write(
+            $hs->build_frame(buffer=>encode_json($item))
+              ->to_bytes);
+        }            
+      } 
+
+      $self->add_to_history($decoded);
+      foreach my $client($self->clients) {
+        $client->push_write(
+          $hs->build_frame(buffer=>encode_json($decoded))
+            ->to_bytes);
+      }
+    }
+  });
+
+  $self->add_client($hd);
+}
+
+__PACKAGE__->meta->make_immutable;
+__PACKAGE__->config( namespace => '');
+
+=head1 Also See
+
+See full code example:
+
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Websocket-Chat>
 
 =head1 Summary
 
-
-L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Websocket-Chat>
+Building on our knowledge of how L<Catalyst> exposes a low level, bi-directional
+socket based on the L<PSGI> specification, we explored using L<AnyEvent> to build
+a multiuser chat applications.
 
 =head1 Author
 

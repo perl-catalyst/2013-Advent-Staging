@@ -40,13 +40,11 @@ sub ws :Path(/ws) {
   my ($self, $ctx) = @_;
   my $hs = Protocol::WebSocket::Handshake::Server->new_from_psgi($ctx->req->env);
   my $hd = AnyEvent::Handle->new(
-    fh => (my $io = $ctx->req->io_fh),
+    fh => $ctx->req->io_fh,
     on_error => sub { warn "Error ".pop });
 
-  $self->add_client($hd);
-  $hs->parse($io);
+  $hs->parse($hd->fh);
   $hd->push_write($hs->to_string);
-
   $hd->on_read(sub {
     (my $frame = $hs->build_frame)->append($_[0]->rbuf);
     while (my $message = $frame->next) {
@@ -68,6 +66,8 @@ sub ws :Path(/ws) {
       }
     }
   });
+
+  $self->add_client($hd);
 }
 
 __PACKAGE__->meta->make_immutable;
