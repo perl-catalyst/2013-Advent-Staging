@@ -20,11 +20,13 @@ Requests to solr can be made through a web browser or any utility such as wget, 
 
 =head2 Alternatives To Solr
 
-The most obvious alternative to Solr is direct implementation of Lucene. Since the purpose of Solr is to provide a more useable interface to Lucene in the first place, this is not good way for novices to get started. An Alternative to Solr that is also built on Lucene is L<ElasticSearch|http://www.elasticsearch.org>. At this time there is far more written about Solr and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under very active development. 
+The most obvious alternative to Solr is direct implementation of Lucene. Since the purpose of Solr is to provide a more useable interface to Lucene in the first place, this is not good way for novices to get started. An Alternative to Solr that is also built on Lucene is L<ElasticSearch|http://www.elasticsearch.org>. At this time there is far more written about Solr and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under active development. 
+
+=head3 Commercial Alternatives
 
 Google Search Appliances offerings are expensive and have a lot of functionality limitations, Google also has a cloud based search offering, with considerably less features than the appliance. The cheap google alternative is to point your visitors at google.com with a site qualifier in the redirect (or any other public search engine). For a lot of developers the AWS CloudSearch service is going to be of great interest, while not free as Solr is, the administrative costs will for most enterprises make it the cheaper choice vs Solr and it appears to be priced much lower than Google Appliances, on the downside it has a far more limited feature set than Solr and does not offer the option of going under the hood as Lucene provides to Solr. 
 
-=head2 Perl Modules
+=head2 Perl Modules for Solr
 
 There are a number of Perl Modules available for Solr, the two that appear the most viable are Apache::Solr and WebService::Solr. Unfortunately,
 all of the modules have problems both in bugs and unimplemented features. Initally I had the best luck with Apache::Solr but ran into some limitations there. After reading through the source code for several of the modules, I decided to work with WebService::Solr. At present it looks like Apache::Solr is being more actively developed so in the future it could become the better choice. 
@@ -35,7 +37,7 @@ A lot of Perl's Solr users prefer to implement their own Agent/Model. Since the 
 
 You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and Catalyst::Model::WebService::Solr. Day One of this Advent Calendar discussed the enhancements in 5.90050, for our purposes the improved UTF8 handling is a Critical Feature and resolves a showstopper bug. When I first looked at WebService::Solr Wide Character Explosions really stymied my first sessions. If updating Catalyst isn't an option for you the workaround I was using is detailed in rtcpan bug 89288. I also strongly recommend using the latest Perl. 
 
-You will also need to install a JVM like open JDK and then download a copy of Solr from L<http://lucene.apache.org/solr/downloads.html|http://lucene.apache.org/solr/downloads.html>.  Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I'll refer you to the Solr tutorial, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have solr running locally with the test data loaded and answering the default port 8983.
+You will also need to install a JVM like open JDK and then download a copy of Solr from L<http://lucene.apache.org/solr/downloads.html|http://lucene.apache.org/solr/downloads.html>.  Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I'll refer you to the L<Solr tutorial|http://lucene.apache.org/solr/tutorial.html>, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have solr running locally with the test data loaded and answering the default port 8983.
  
  Terminal 1
  cd ..path_to../example
@@ -50,7 +52,7 @@ You will also need to install a JVM like open JDK and then download a copy of So
  catalyst.pl SolrDemo
  cd SolrDemo
  ./script/solrdemo_create.pl view HTML TT
- 
+
 Edit the SolrDemo.conf files
 
  solrserver         http://localhost:8983/solr/collection1
@@ -84,7 +86,7 @@ In addition I recommend creating a reset script in the example/exampledocs folde
 
 =head1 A Thin Model with Catalyst::Model::WebService::Solr
 
-This is a very short Model and there are only two options to configure, where to connect and autocommit. By default solr may not immediately reflect changes to data, and the autocommit flag tells WebService::Solr to always follow delete/add operations with a commit request. You might want to turn it off if you were writing batches of data and wanted to commit at the end of the batch for performance purposes.
+There are only two options to configure, where to connect and autocommit. By default solr may not immediately reflect changes to data, and the autocommit flag tells WebService::Solr to always follow delete/add operations with a commit request. You might want to turn it off if you were writing batches of data and wanted to commit at the end of the batch for performance purposes.
 
 File: lib/SolrDemo/Model/SolrModelSolr
 
@@ -141,7 +143,7 @@ File: lib/SolrDemo/Controller/Thin.pm
         $c->response->body("<pre>$pre </pre>");
     }
 
-    sub select : Local : Args(0) {
+    sub example : Local : Args(0) {
         my ( $self, $c ) = @_;
         my $response =
         $c->model('SolrModelSolr')
@@ -159,15 +161,15 @@ File: lib/SolrDemo/Controller/Thin.pm
 
 =head3 response2info
 
-The response2info sub consolidates code that would have been repeated by both methods. Functionally this is view code, but I'm not using a view, for convenience it goes here. What we're doing with this method is a raw dump of everything returned by WebService::Solr. 
+The response2info sub consolidates code that would have been repeated by both methods, this is view code but for convenience it went here. What we're doing with this method is a raw dump of everything returned by WebService::Solr. 
 
 =head3 dump
 
 Executes a query for all records in the solr database. Notice that we need WebService::Solr::Query to help generate queries, I've proposed a shortcut for what you see in the first argument. To generate the query you need to pass a hashref of the solr fields you want and the values for the fields, the \ indicates to pass the second * as a literal string. The second argument is a hashref of options, here we need to override the solr default of returning 10 rows by specifying an arbitrary high value.
 
-=head3 select
+=head3 example
 
-This select query is hard coded to find items matching the phrase 'hard drive', which, we see from the spew, gets translated as 'hard+drive'. Here we specified the field text (which is a catch-all field defined to hold everything searchable) and passed an array ref to the list of values. If you copy and rename the method and then change the field list to C<['hard drive','maxtor']>, you will find that you still get the same 2 records, this is because of solr's matching behaviour. If you want to filter for only maxtor hard drives you'll need to use a filter query (fq) which is specified in the options.
+This example query is hard coded to find items matching the phrase 'hard drive', which, we see from the spew, gets translated as 'hard+drive'. Here we specified the field text (which is a catch-all field defined to hold everything searchable) and passed an array ref to the list of values. If you copy and rename the method and then change the field list to C<['hard drive','maxtor']>, you will find that you still get the same 2 records, this is because of solr's matching behaviour. If you want to filter for only maxtor hard drives you'll need to use a filter query (fq) which is specified in the options.
 
 Add the following method to Thin.pm
 
@@ -186,7 +188,7 @@ Add the following method to Thin.pm
 
 Add this method to: Thin.pm
 
-    sub realquery : Local : Args(2) {
+    sub select : Local : Args(2) {
         my ( $self, $c, $fieldname, $fieldvalue ) = @_;
         my $response =
         $c->model('SolrModelSolr')
@@ -215,7 +217,7 @@ File: /root/results.tt
     [% END %]
     </table>
 
-Try some queries: http://localhost:3000/thin/realquery/text/ipod  http://localhost:3000/thin/realquery/features/cache http://localhost:3000/thin/realquery/manu/maxtor
+Try some queries: http://localhost:3000/thin/select/text/ipod  http://localhost:3000/thin/select/features/cache http://localhost:3000/thin/select/manu/maxtor
 
 First the model returns a WebService::Solr::Response object, we use the docs method to extract an array of WebService::Solr::Document objects from it which are then passed by reference to the view. The view iterates the array and uses the C<fieldnames> method to get a list of the fields in that document (not all documents in the test data have the same fields) and then iterates through it finally retrieving individual fields with the C<value_for method>.
 
@@ -290,7 +292,7 @@ lib/SolrDemo/Controller/Fat.pm
 
     BEGIN { extends 'Catalyst::Controller' }
 
-    sub realquery : Local : Args(2) {
+    sub select : Local : Args(2) {
         my ( $self, $c, $fieldname, $fieldvalue ) = @_;
         my @docs = $c->model('Solr')->List( { $fieldname => $fieldvalue } );
         $c->stash(
@@ -317,13 +319,13 @@ lib/SolrDemo/Controller/Fat.pm
 
     1;
 
-The Model contains 3 methods. The private method generates a geofilter string, because that isn't currently implemented in WebService::Solr, but I've proposed it for a future release. Of the other two methods the first replicates the realquery we used in the thin model and the third finds things near the Kimmel Center in Philadelphia as an example of geospatial search.
+The Model contains 3 methods. The private method generates a geofilter string, because that isn't currently implemented in WebService::Solr, but I've proposed it for a future release. Of the other two methods the first replicates the select we used in the thin model and the third finds things near the Kimmel Center in Philadelphia as an example of geospatial search.
 
-You should now be able to run the tests, and if they work when you run the test server, /fat/realquery/?/? will work as it did in the thin model, and /fat/nearkimmel will show you the results of the geospatial filter.
+You should now be able to run the tests, and if they work when you run the test server, /fat/select/?/? will work as it did in the thin model, and /fat/nearkimmel will show you results of a geospatial filter.
 
 =head2 Adding, Updating, and Deleting
 
-We're now going to add a record, modify it, and then delete it. This is all going to be done in tests because Controller and View code is superfluous to this article. 
+We're now going to add a record, modify it, and then delete it. This is all going to be done in tests. 
 
 Two methods get added to the model, Delete and Add (which is also the update method). Both methods normally return a value of B<1>, which is the value normally returned by the underlying WebService::Solr method, which in turn is determined by Solr's response, which is not necessarily an indicator that what you intended to happen is what happened. 
 
@@ -331,7 +333,16 @@ Two methods get added to the model, Delete and Add (which is also the update met
 
 Add and Update are the same method. When a document is added with the same id as an existing document solr replaces the original record with the new one. This means whenever we update a record we need to send the entire new version. 
 
-The Add method takes a hashref of fieldnames and values which it uses to create a WebService::Solr Document. There is an optional parameter to the WebService::Solr->add method for setting boost values on fields, the Add method of our Model does not implement it. 
+The Add method takes a hashref of fieldnames and values which it uses to create a WebService::Solr::Document. There is an optional parameter to the WebService::Solr->add method for setting boost values on fields, the Add method of our Model does not implement it. A WebService::Solr::Document can be created in 3 ways, first it can be returned by a query to Solr, second it can be constructed from arrays of WebService::Solr::Field objects, and finally we can pass an array of array references to the constructructor.  
+
+Here is an example of a data structure to create a WebService::Solr::Document. 
+
+ my @fields = (
+    [ id     => 'B0019032-02'                     { boost => 1.6 } ],
+    [ artist => 'Philadelphia Orchestra',       { boost => '7.1' } ],
+    [ format => 'CD Audio'                                         ],
+    [ title  => 'Yannick Conducts Stravinsky: The Rite of Spring'  ],
+ );
 
 =head2 Delete
 
@@ -436,7 +447,9 @@ Add to t/model_solr.t immediately above done_testing
 
 =head1 For More Information
 
-After following this how-to document you'll want to read the WebService::Solr Documentation. It is organized by sub-module so you'll have to read all of the pieces, plus the tests from the distribution which are where you'll find code examples. 
+After following this how-to document you'll want to read the WebService::Solr Documentation. It is organized by sub-module so you'll have to read all of the pieces, plus the tests from the distribution which are where you'll find code examples. You'll also want to read the Solr Documentation, there is a lot more on the web about it than the module.
+
+If there are any errata to this article they will be posted on my L<technical blog|http://techinfo.brainbuz.org/>. You can download the entire contents and source for this article as well L<http://www.brainbuz.org/docs/adv2013solr.tgz>.
 
 =head1 Summary
 

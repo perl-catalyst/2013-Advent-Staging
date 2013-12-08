@@ -4,7 +4,7 @@
 <head>
 <title></title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
-<link rev="made" href="mailto:johnk@johnklxopr.(none)" />
+<link rev="made" href="mailto:root@maya.(none)" />
 </head>
 
 <body style="background-color: white">
@@ -17,8 +17,12 @@
   <li><a href="#INTRODUCTION">INTRODUCTION</a>
     <ul>
       <li><a href="#Solr-Basics">Solr Basics</a></li>
-      <li><a href="#Alternatives-To-Solr">Alternatives To Solr</a></li>
-      <li><a href="#Perl-Modules">Perl Modules</a></li>
+      <li><a href="#Alternatives-To-Solr">Alternatives To Solr</a>
+        <ul>
+          <li><a href="#Commercial-Alternatives">Commercial Alternatives</a></li>
+        </ul>
+      </li>
+      <li><a href="#Perl-Modules-for-Solr">Perl Modules for Solr</a></li>
     </ul>
   </li>
   <li><a href="#Preparing-the-Environment">Preparing the Environment</a></li>
@@ -29,7 +33,7 @@
         <ul>
           <li><a href="#response2info">response2info</a></li>
           <li><a href="#dump">dump</a></li>
-          <li><a href="#select">select</a></li>
+          <li><a href="#example">example</a></li>
           <li><a href="#a-real-search">a real search</a></li>
         </ul>
       </li>
@@ -69,11 +73,13 @@
 
 <h2 id="Alternatives-To-Solr">Alternatives To Solr</h2>
 
-<p>The most obvious alternative to Solr is direct implementation of Lucene. Since the purpose of Solr is to provide a more useable interface to Lucene in the first place, this is not good way for novices to get started. An Alternative to Solr that is also built on Lucene is <a href="http://www.elasticsearch.org">ElasticSearch</a>. At this time there is far more written about Solr and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under very active development.</p>
+<p>The most obvious alternative to Solr is direct implementation of Lucene. Since the purpose of Solr is to provide a more useable interface to Lucene in the first place, this is not good way for novices to get started. An Alternative to Solr that is also built on Lucene is <a href="http://www.elasticsearch.org">ElasticSearch</a>. At this time there is far more written about Solr and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under active development.</p>
+
+<h3 id="Commercial-Alternatives">Commercial Alternatives</h3>
 
 <p>Google Search Appliances offerings are expensive and have a lot of functionality limitations, Google also has a cloud based search offering, with considerably less features than the appliance. The cheap google alternative is to point your visitors at google.com with a site qualifier in the redirect (or any other public search engine). For a lot of developers the AWS CloudSearch service is going to be of great interest, while not free as Solr is, the administrative costs will for most enterprises make it the cheaper choice vs Solr and it appears to be priced much lower than Google Appliances, on the downside it has a far more limited feature set than Solr and does not offer the option of going under the hood as Lucene provides to Solr.</p>
 
-<h2 id="Perl-Modules">Perl Modules</h2>
+<h2 id="Perl-Modules-for-Solr">Perl Modules for Solr</h2>
 
 <p>There are a number of Perl Modules available for Solr, the two that appear the most viable are Apache::Solr and WebService::Solr. Unfortunately, all of the modules have problems both in bugs and unimplemented features. Initally I had the best luck with Apache::Solr but ran into some limitations there. After reading through the source code for several of the modules, I decided to work with WebService::Solr. At present it looks like Apache::Solr is being more actively developed so in the future it could become the better choice.</p>
 
@@ -83,7 +89,7 @@
 
 <p>You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and Catalyst::Model::WebService::Solr. Day One of this Advent Calendar discussed the enhancements in 5.90050, for our purposes the improved UTF8 handling is a Critical Feature and resolves a showstopper bug. When I first looked at WebService::Solr Wide Character Explosions really stymied my first sessions. If updating Catalyst isn&#39;t an option for you the workaround I was using is detailed in rtcpan bug 89288. I also strongly recommend using the latest Perl.</p>
 
-<p>You will also need to install a JVM like open JDK and then download a copy of Solr from <a href="http://lucene.apache.org/solr/downloads.html">http://lucene.apache.org/solr/downloads.html</a>. Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I&#39;ll refer you to the Solr tutorial, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have solr running locally with the test data loaded and answering the default port 8983.</p>
+<p>You will also need to install a JVM like open JDK and then download a copy of Solr from <a href="http://lucene.apache.org/solr/downloads.html">http://lucene.apache.org/solr/downloads.html</a>. Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I&#39;ll refer you to the <a href="http://lucene.apache.org/solr/tutorial.html">Solr tutorial</a>, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have solr running locally with the test data loaded and answering the default port 8983.</p>
 
 <pre><code> Terminal 1
  cd ..path_to../example
@@ -97,8 +103,7 @@
 
 <pre><code> catalyst.pl SolrDemo
  cd SolrDemo
- ./script/solrdemo_create.pl view HTML TT
- </code></pre>
+ ./script/solrdemo_create.pl view HTML TT</code></pre>
 
 <p>Edit the SolrDemo.conf files</p>
 
@@ -133,7 +138,7 @@
 
 <h1 id="A-Thin-Model-with-Catalyst::Model::WebService::Solr">A Thin Model with Catalyst::Model::WebService::Solr</h1>
 
-<p>This is a very short Model and there are only two options to configure, where to connect and autocommit. By default solr may not immediately reflect changes to data, and the autocommit flag tells WebService::Solr to always follow delete/add operations with a commit request. You might want to turn it off if you were writing batches of data and wanted to commit at the end of the batch for performance purposes.</p>
+<p>There are only two options to configure, where to connect and autocommit. By default solr may not immediately reflect changes to data, and the autocommit flag tells WebService::Solr to always follow delete/add operations with a commit request. You might want to turn it off if you were writing batches of data and wanted to commit at the end of the batch for performance purposes.</p>
 
 <p>File: lib/SolrDemo/Model/SolrModelSolr</p>
 
@@ -190,7 +195,7 @@
         $c-&gt;response-&gt;body(&quot;&lt;pre&gt;$pre &lt;/pre&gt;&quot;);
     }
 
-    sub select : Local : Args(0) {
+    sub example : Local : Args(0) {
         my ( $self, $c ) = @_;
         my $response =
         $c-&gt;model(&#39;SolrModelSolr&#39;)
@@ -208,15 +213,15 @@
 
 <h3 id="response2info">response2info</h3>
 
-<p>The response2info sub consolidates code that would have been repeated by both methods. Functionally this is view code, but I&#39;m not using a view, for convenience it goes here. What we&#39;re doing with this method is a raw dump of everything returned by WebService::Solr.</p>
+<p>The response2info sub consolidates code that would have been repeated by both methods, this is view code but for convenience it went here. What we&#39;re doing with this method is a raw dump of everything returned by WebService::Solr.</p>
 
 <h3 id="dump">dump</h3>
 
 <p>Executes a query for all records in the solr database. Notice that we need WebService::Solr::Query to help generate queries, I&#39;ve proposed a shortcut for what you see in the first argument. To generate the query you need to pass a hashref of the solr fields you want and the values for the fields, the \ indicates to pass the second * as a literal string. The second argument is a hashref of options, here we need to override the solr default of returning 10 rows by specifying an arbitrary high value.</p>
 
-<h3 id="select">select</h3>
+<h3 id="example">example</h3>
 
-<p>This select query is hard coded to find items matching the phrase &#39;hard drive&#39;, which, we see from the spew, gets translated as &#39;hard+drive&#39;. Here we specified the field text (which is a catch-all field defined to hold everything searchable) and passed an array ref to the list of values. If you copy and rename the method and then change the field list to <code>[&#39;hard drive&#39;,&#39;maxtor&#39;]</code>, you will find that you still get the same 2 records, this is because of solr&#39;s matching behaviour. If you want to filter for only maxtor hard drives you&#39;ll need to use a filter query (fq) which is specified in the options.</p>
+<p>This example query is hard coded to find items matching the phrase &#39;hard drive&#39;, which, we see from the spew, gets translated as &#39;hard+drive&#39;. Here we specified the field text (which is a catch-all field defined to hold everything searchable) and passed an array ref to the list of values. If you copy and rename the method and then change the field list to <code>[&#39;hard drive&#39;,&#39;maxtor&#39;]</code>, you will find that you still get the same 2 records, this is because of solr&#39;s matching behaviour. If you want to filter for only maxtor hard drives you&#39;ll need to use a filter query (fq) which is specified in the options.</p>
 
 <p>Add the following method to Thin.pm</p>
 
@@ -236,7 +241,7 @@
 
 <p>Add this method to: Thin.pm</p>
 
-<pre><code>    sub realquery : Local : Args(2) {
+<pre><code>    sub select : Local : Args(2) {
         my ( $self, $c, $fieldname, $fieldvalue ) = @_;
         my $response =
         $c-&gt;model(&#39;SolrModelSolr&#39;)
@@ -265,7 +270,7 @@
     [% END %]
     &lt;/table&gt;</code></pre>
 
-<p>Try some queries: http://localhost:3000/thin/realquery/text/ipod http://localhost:3000/thin/realquery/features/cache http://localhost:3000/thin/realquery/manu/maxtor</p>
+<p>Try some queries: http://localhost:3000/thin/select/text/ipod http://localhost:3000/thin/select/features/cache http://localhost:3000/thin/select/manu/maxtor</p>
 
 <p>First the model returns a WebService::Solr::Response object, we use the docs method to extract an array of WebService::Solr::Document objects from it which are then passed by reference to the view. The view iterates the array and uses the <code>fieldnames</code> method to get a list of the fields in that document (not all documents in the test data have the same fields) and then iterates through it finally retrieving individual fields with the <code>value_for method</code>.</p>
 
@@ -340,7 +345,7 @@
 
     BEGIN { extends &#39;Catalyst::Controller&#39; }
 
-    sub realquery : Local : Args(2) {
+    sub select : Local : Args(2) {
         my ( $self, $c, $fieldname, $fieldvalue ) = @_;
         my @docs = $c-&gt;model(&#39;Solr&#39;)-&gt;List( { $fieldname =&gt; $fieldvalue } );
         $c-&gt;stash(
@@ -367,13 +372,13 @@
 
     1;</code></pre>
 
-<p>The Model contains 3 methods. The private method generates a geofilter string, because that isn&#39;t currently implemented in WebService::Solr, but I&#39;ve proposed it for a future release. Of the other two methods the first replicates the realquery we used in the thin model and the third finds things near the Kimmel Center in Philadelphia as an example of geospatial search.</p>
+<p>The Model contains 3 methods. The private method generates a geofilter string, because that isn&#39;t currently implemented in WebService::Solr, but I&#39;ve proposed it for a future release. Of the other two methods the first replicates the select we used in the thin model and the third finds things near the Kimmel Center in Philadelphia as an example of geospatial search.</p>
 
-<p>You should now be able to run the tests, and if they work when you run the test server, /fat/realquery/?/? will work as it did in the thin model, and /fat/nearkimmel will show you the results of the geospatial filter.</p>
+<p>You should now be able to run the tests, and if they work when you run the test server, /fat/select/?/? will work as it did in the thin model, and /fat/nearkimmel will show you results of a geospatial filter.</p>
 
 <h2 id="Adding-Updating-and-Deleting">Adding, Updating, and Deleting</h2>
 
-<p>We&#39;re now going to add a record, modify it, and then delete it. This is all going to be done in tests because Controller and View code is superfluous to this article.</p>
+<p>We&#39;re now going to add a record, modify it, and then delete it. This is all going to be done in tests.</p>
 
 <p>Two methods get added to the model, Delete and Add (which is also the update method). Both methods normally return a value of <b>1</b>, which is the value normally returned by the underlying WebService::Solr method, which in turn is determined by Solr&#39;s response, which is not necessarily an indicator that what you intended to happen is what happened.</p>
 
@@ -381,7 +386,16 @@
 
 <p>Add and Update are the same method. When a document is added with the same id as an existing document solr replaces the original record with the new one. This means whenever we update a record we need to send the entire new version.</p>
 
-<p>The Add method takes a hashref of fieldnames and values which it uses to create a WebService::Solr Document. There is an optional parameter to the WebService::Solr-&gt;add method for setting boost values on fields, the Add method of our Model does not implement it.</p>
+<p>The Add method takes a hashref of fieldnames and values which it uses to create a WebService::Solr::Document. There is an optional parameter to the WebService::Solr-&gt;add method for setting boost values on fields, the Add method of our Model does not implement it. A WebService::Solr::Document can be created in 3 ways, first it can be returned by a query to Solr, second it can be constructed from arrays of WebService::Solr::Field objects, and finally we can pass an array of array references to the constructructor.</p>
+
+<p>Here is an example of a data structure to create a WebService::Solr::Document.</p>
+
+<pre><code> my @fields = (
+    [ id     =&gt; &#39;B0019032-02&#39;                     { boost =&gt; 1.6 } ],
+    [ artist =&gt; &#39;Philadelphia Orchestra&#39;,       { boost =&gt; &#39;7.1&#39; } ],
+    [ format =&gt; &#39;CD Audio&#39;                                         ],
+    [ title  =&gt; &#39;Yannick Conducts Stravinsky: The Rite of Spring&#39;  ],
+ );</code></pre>
 
 <h2 id="Delete">Delete</h2>
 
@@ -486,7 +500,9 @@
 
 <h1 id="For-More-Information">For More Information</h1>
 
-<p>After following this how-to document you&#39;ll want to read the WebService::Solr Documentation. It is organized by sub-module so you&#39;ll have to read all of the pieces, plus the tests from the distribution which are where you&#39;ll find code examples.</p>
+<p>After following this how-to document you&#39;ll want to read the WebService::Solr Documentation. It is organized by sub-module so you&#39;ll have to read all of the pieces, plus the tests from the distribution which are where you&#39;ll find code examples. You&#39;ll also want to read the Solr Documentation, there is a lot more on the web about it than the module.</p>
+
+<p>If there are any errata to this article they will be posted on my <a href="http://techinfo.brainbuz.org/">technical blog</a>. You can download the entire contents and source for this article as well <a href="http://www.brainbuz.org/docs/adv2013solr.tgz">http://www.brainbuz.org/docs/adv2013solr.tgz</a>.</p>
 
 <h1 id="Summary">Summary</h1>
 

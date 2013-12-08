@@ -37,7 +37,7 @@ sub dump : Local : Args(0) {
     $c->response->body("<pre>$pre </pre>");
 }
 
-sub select : Local : Args(0) {
+sub example : Local : Args(0) {
     my ( $self, $c ) = @_;
     my $response =
       $c->model('SolrModelSolr')
@@ -58,7 +58,7 @@ sub maxtor : Local : Args(0) {
     $c->response->body("<pre>$pre </pre>");
 }
 
-sub realquery : Local : Args(2) {
+sub select : Local : Args(2) {
     my ( $self, $c, $fieldname, $fieldvalue ) = @_;
     my $response =
       $c->model('SolrModelSolr')

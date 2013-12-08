@@ -4,7 +4,7 @@ use Moose;
 
 BEGIN { extends 'Catalyst::Controller' }
 
-sub realquery : Local : Args(2) {
+sub select : Local : Args(2) {
     my ( $self, $c, $fieldname, $fieldvalue ) = @_;
     my @docs = $c->model('Solr')->List( { $fieldname => $fieldvalue } );
     $c->stash(
