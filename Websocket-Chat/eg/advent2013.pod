@@ -1,0 +1,16 @@
+=head1 Websocket Multiuser Chat 
+
+=head1 Overview
+
+=head1 Introduction
+
+=head1 Summary
+
+
+L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Websocket-Chat>
+
+=head1 Author
+
+John Napiorkowski L<email:jjnapiork@cpan.org>
+
+=cut
