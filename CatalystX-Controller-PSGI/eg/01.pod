@@ -1,12 +1,12 @@
 =head1 Title
 
-CataylstX::Controller::PSGI - Using Plack apps inside Catalyst Controllers - Part 1
+CatalystX::Controller::PSGI - Using Plack apps inside Catalyst Controllers - Part 1
 
 =head1 Overview
 
 Sometimes you might want to use a Plack app as part of your application, but
 don't want to mess around with your .psgi file mounting different parts under
-different urls, or running seperate servers and setting up rewrite/proxy rules.
+different urls, or running separate servers and setting up rewrite/proxy rules.
 
 =head1 Introduction
 
@@ -15,7 +15,7 @@ cgi/modperl application, and we've since wrapped in Plack. Now we've decided
 we want to start using Catalyst, but we don't want to rewite our decade old legacy
 app, and we don't want to run multiple servers or mess around with rewrite rules.
 
-=head1 Prequisites
+=head1 Prerequisites
 
 L<Task::Catalyst>, L<CatalystX::Controller::PSGI>
 
@@ -37,7 +37,7 @@ We're going to replace the following action with a Catalyst action
 
 =head1 The Code
 
-We'll start by creating a new Cataylst app
+We'll start by creating a new Catalyst app
 
     catalyst.pl MyApp
 
@@ -47,7 +47,7 @@ First, edit the new Root.pm to use L<CatalystX::Controller::PSGI> and mount our
 legacy .psgi as the root action
 
 edit MyApp/lib/MyApp/Controller/Root.pm and replace everything with the following,
-since cataylst.pl has given us a lot of helpful defaults, which are not helpful
+since Catalyst.pl has given us a lot of helpful defaults, which are not helpful
 in our case.
 
     package MyApp::Controller::Root;
@@ -84,7 +84,7 @@ L<CatalystX::Controller::PSGI> uses as the / action of this controller. Which
 is also the / of the app, because this is the root controller.
 
 So now any url will match the root action (call is registered as :Local, meaning
-it can take an unlimited amount of arguments). But it still won't work, becuase
+it can take an unlimited amount of arguments). But it still won't work, because
 bin/legacy.psgi doesn't exist. So let's fix that by creating it.
 
     use strict;
@@ -140,7 +140,7 @@ dispatching our requests to the psgi app. Obviously this has a performance hit,
 as we've added the Catalyst request/response cycle in, but it doesn't matter, as
 we're going to gain more than we've lost in the long term.
 
-Next lets replace I</some/other/action> with our new awesome cataylst code.
+Next lets replace I</some/other/action> with our new awesome Catalyst code.
 
 Create the file MyApp/lib/MyApp/Controller/Some.pm
 
