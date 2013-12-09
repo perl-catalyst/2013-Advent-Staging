@@ -1,6 +1,6 @@
 =head1 Title
 
-CataylstX::Controller::PSGI - Using Plack apps inside Catalyst Controllers - Part 2
+CatalystX::Controller::PSGI - Using Plack apps inside Catalyst Controllers - Part 2
 
 =head1 Overview
 
@@ -8,10 +8,10 @@ In part 1 of this article, I covered the basics of wrapping a .psgi app inside
 Catalyst so we could work on adding new urls the Catalyst way, whilst still having
 our legacy app working as before.
 
-In this part I'll be covering converting parts of that legacy app into Cataylst
+In this part I'll be covering converting parts of that legacy app into Catalyst
 Models, and passing them back to the legacy app at startup
 
-=head1 Prequisites
+=head1 Prerequisites
 
 Read L<Part 1|http://www.catalystframework.org/calendar/2013/16> first
 
@@ -64,7 +64,7 @@ legacy psgi.
     }
 
 Looking at our legacy app, we only need a few urls, one of which has already
-been over written. So we can tidy it up, and seperate out the not found action
+been over written. So we can tidy it up, and separate out the not found action
 into a proper Catalyst action, if instead of using call we use mount
 
 The downside of this is we pass a subref to mount, so we can't use a Moose
@@ -112,7 +112,7 @@ and the /some/other/action handler, since we've replaced that.
     __PACKAGE__->mount( 'foo'           => $app );
 
 There's a lot going on there, and we can split it up further, lets do some
-cleaning and add a Cataylst 404 handler, aka the default action
+cleaning and add a Catalyst 404 handler, aka the default action
 
 A good thing to note with mount is that $self is passed into the app, as well
 $env, meaning we can set Moose attributes for the legacy_app and db
