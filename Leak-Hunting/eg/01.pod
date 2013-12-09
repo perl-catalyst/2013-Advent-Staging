@@ -1,0 +1,249 @@
+=head1 Title
+
+Hunting memory leaks in Catalyst apps
+
+=head1 Overview
+
+It's very easy to make a memory leak in Catalyst, the most common being circular
+references. This article will deal with finding them, and fixing them, using the
+ready made L<CatalystX::LeakChecker>
+
+=head1 Prerequisites
+
+L<Task::Catalyst>, L<CatalystX::LeakChecker>
+
+=head1 The Code
+
+We have a controller, Root.pm, and in it we stash the current context. Why? Because
+it'll leak, and that's what I'm here to show you how to find
+
+    package MyApp::Controller::Root;
+    use Moose;
+    use namespace::autoclean;
+
+    BEGIN { extends 'Catalyst::Controller' };
+
+    __PACKAGE__->config(namespace => '');
+
+    sub default: Private {
+        my ( $self, $c ) = @_;
+
+        $c->stash(
+            leak    => $c,
+        );
+        $c->res->body('drip');
+    }
+
+    __PACKAGE__->meta->make_immutable;
+
+So how do we find out how much this'll leak? The easy way is to knock up a quick
+script that'll make X amount of requests. Here's one I made earlier. Note, it'll
+only work on Linux due to checking /proc for the memory usage.
+
+    use strict;
+    use warnings;
+
+    use Test::WWW::Mechanize::PSGI;
+    use Plack::Util;
+
+    use FindBin qw($Bin);
+
+    my $app = Plack::Util::load_psgi "${Bin}/myapp.psgi";
+
+    my $mech = Test::WWW::Mechanize::PSGI->new(
+        app => $app,
+    );
+
+    my $start_mem = get_mem();
+    for my $i (0..10_000) {
+        $mech->get('/');
+        print "${i} requests\n" if ( $i % 1000 ) == 0;
+    }
+    my $end_mem = get_mem();
+
+    print "start mem usage: ${start_mem}mb\n";
+    print "end mem usage: ${end_mem}mb\n";
+    print "diff " . ($end_mem - $start_mem) . "mb\n";
+
+    sub get_mem {
+        my $mem = `grep VmRSS /proc/$$/status`;
+        return [split(qr/\s+/, $mem)]->[1] / 1024;
+    }
+
+Basically we make 10,000 requests to /, which will be handled by our leaky default
+action. Nothing else is going on in the Catalyst app, so memory use should be pretty
+low. Lets see
+
+    $ perl -I lib loop_requests.pl
+
+    0 requests
+    1000 requests
+    2000 requests
+    3000 requests
+    4000 requests
+    5000 requests
+    6000 requests
+    7000 requests
+    8000 requests
+    9000 requests
+    10000 requests
+    start mem usage: 36.7578125mb
+    end mem usage: 182.125mb
+    diff 145.3671875mb
+
+Yep, that's 145mb of used memory for 10,000 requests to an action that does nothing.
+Something is definitely wrong. Let's find out what (although we already know, but
+forget that ok?)
+
+First, read the docs for L<CatalystX::LeakChecker>, because it's worth knowing what's
+going to happen. Especially this part
+
+    It's easy to create memory leaks in Catalyst applications and often they're hard to find. This module tries to help you finding them by automatically checking for common causes of leaks.
+
+    This module is intended for debugging only. I suggest to not enable it in a production environment.
+
+Anyway, you've read that, let's get going. Modify MyApp.pm, and load the plugin
+
+    use Catalyst qw/+CatalystX::LeakChecker/;
+
+Note the +, that's because the package name doesn't start Cataylst::Plugin, so you
+have to tell Catalyst that it's a fully qualified name, otherwise it would try to
+load Catalyst::Plugin::CaatalystX::LeakChecker, which is nonsense.
+
+Now we've loaded the plugin, we'll start our app in debug mode
+
+    CATALYST_DEBUG=1 plackup -I lib myapp.psgi --no-default-middleware
+
+Now point your browser to the url, probably http://localhost:5000/, you should see
+the page output, in this case the highly imaginative "I<drip>". The important info
+is in our console window though, so what do we have there?
+
+    Unhandled type: GLOB at /home/mark/perl5/perlbrew/perls/perl-5.12.5/lib/site_perl/5.12.5/Devel/Cycle.pm line 107.
+    [info] *** Request 1 (0.500/s) [7048] [Mon Dec  9 22:02:15 2013] ***
+    [debug] "GET" request for "/" from "127.0.0.1"
+    [debug] Response Code: 200; Content-Type: unknown; Content-Length: 4
+    [info] Request took 0.001685s (593.472/s)
+    .------------------------------------------------------------+-----------.
+    | Action                                                     | Time      |
+    +------------------------------------------------------------+-----------+
+    | /default                                                   | 0.000078s |
+    '------------------------------------------------------------+-----------'
+
+    [debug] Circular reference detected:
+    .------------------------------------------------------------------------.
+    | $ctx->{stash}->{leak}                                                  |
+    '------------------------------------------------------------------------'
+
+First of we've got a warning about an unhandled type, that's not important to us.
+Next we have the action table, showing what ran, how long it took etc. After that
+we have a debug note and a new table. The note helpfully tells us that there was
+a I<Circular reference detected>. Awesome, and not only that it tells us where.
+
+So we now know that in the default action, stash->leak is set, and it's a circular
+reference.
+
+    $c->stash(
+        leak    => $c,
+    );
+
+Yep, it sure is. So we can fix that, either by refactoring our code not to be so
+stupid, or, we can wrap it in a sub ref, because that'll help.
+
+    $c->stash(
+        leak    => sub {
+            return $c;
+        }
+    );
+
+Ha, perl can't beat me, and I'm lazy so I'm sure this'll work. But let's make sure,
+restart the app, and rerun the request.
+
+    [debug] Circular reference detected:
+    .------------------------------------------------------------------------.
+    | $a = $ctx->{stash}->{leak};                                            |
+    | code reference $a deparses to: sub {                                   |
+    |     package MyApp::Controller::Root;                                   |
+    |     use warnings;                                                      |
+    |     use strict 'refs';                                                 |
+    |     return $c;                                                         |
+    | };                                                                     |
+    | ${ $c }                                                                |
+    '------------------------------------------------------------------------'
+
+Oh, that made no difference. Makes sense, since $c->stash contains a reference to $c
+which contains a reference to $c->stash... But at least we get a nice helpful error
+message which tells us several things.
+
+=over
+
+=item *
+
+The leak is in stash->{leak}
+
+=item *
+
+A coderef is leaking
+
+=item *
+
+The coderef is in package MyApp::Controller::Root
+
+=item *
+
+It's probably the part where we return $c that's the problem
+
+=back
+
+Anyway, that's 2 examples of leaks and finding them. And if you think it's not
+worth doing, that leaks arn't something you'll do, well I just did this on some
+of my code and found
+
+    package TAN::Model::MySQL;
+    use Moose;
+
+    extends 'Catalyst::Model::DBIC::Schema';
+
+    sub ACCEPT_CONTEXT{
+        my $self = shift;
+        my $c = shift;
+
+        $self->schema->trigger_event( sub{ $c->trigger_event( @_ ) } );
+        $self->schema->cache( $c->cache );
+
+        return $self;
+    }
+
+Which I committed on 2011-09-06 05:12:09, so that's been sitting there leaking
+away for years... the morale of the story? Probably something about not working
+all night and taking the easy way out. That and if it feels wrong, it probably is!
+
+P.S. here's the output of loop_requests.pl with no leak, just for comparison
+
+    0 requests
+    1000 requests
+    2000 requests
+    3000 requests
+    4000 requests
+    5000 requests
+    6000 requests
+    7000 requests
+    8000 requests
+    9000 requests
+    10000 requests
+    start mem usage: 36.7578125mb
+    end mem usage: 66.51953125mb
+    diff 29.76171875mb
+
+=head1 Summary
+
+Leaks are easy to make, but thanks to the tools we have in place, they're also
+easy to find. Most of the time.
+
+You can see the code for this article at L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Leak-Hunting>
+
+
+=head1 Author
+
+Mark Ellis L<email:nobody@cpan.org>
+
+=cut
