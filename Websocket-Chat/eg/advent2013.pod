@@ -2,7 +2,7 @@
 
 =head1 Overview
 
-Following up on our Websockets Echo example lets build a basic and functional
+Following up on our Websockets Echo example let's build a basic and functional
 multiuser chat application.
 
 =head1 Introduction
@@ -26,8 +26,7 @@ example we will use that approach.
 
 A true multiuser chat would need significantly more security hardening than this
 example will show.  There's no reason you could not build such security on top
-of existing tools in the L<Catalyst> ecosystem.  We will keep it simple for the
-purposes of demostration!
+of existing tools in the L<Catalyst> ecosystem.
 
 =head1 The Code
 
@@ -35,7 +34,7 @@ Although I usually try to break my model down more carefully, sometimes for
 prototyping, or for build a proof of concept, I make uber controllers.  Since
 all L<Catalyst::Controller>s play nice with L<Moose> this makes it easy to
 build some simple models and attributes on your controller.  Once you nail
-down the API, you have start to refactor code more correctly.  But it makes
+down the API, you can start to refactor code more correctly.  But it makes
 a nice first draft!
 
 Let's look at the first part of the controller:
@@ -46,7 +45,6 @@ Let's look at the first part of the controller:
     use MooseX::MethodAttributes;
     use AnyEvent::Handle;
     use Protocol::WebSocket::Handshake::Server;
-    use Protocol::WebSocket::Frame;
     use JSON;
 
     extends 'Catalyst::Controller';
@@ -79,7 +77,7 @@ one is the history of the chat, which will be an arrayref of user => message:
       ...
     ]
 
-The send is a arrayref of the connected clients.  Ultimately as you will see
+The C<clients> is a arrayref of the connected clients.  Ultimately as you will see
 this is an arrayref of handles to the websocket.
 
 Since we are going to run this under a single process server, we get away with
@@ -185,8 +183,146 @@ template:
     </html>
 
 We're using angular.js, which is Javascript framework that makes is easy to
-do you user interface work in a more model-view-controller manner.  There's
-view template with 
+do your user interface work in a more model-view-controller manner.  I'm not
+going to do details here since I'm still learning angular.js and my code is
+likely not the best possible approach.  However if you know a bit of Javascript
+it should be pretty clear.  There's a script section which defines some
+variables under a controller and sets events to listen for and things to do
+when those events happen.
+
+The second part is some HTML with the angular.js tags which indicate binds
+to the variables under the controller.  One really cool part of angular.js is
+in how if the variables are changed, HTML that binds to them automatically
+updates.  This saves you a lot of low level plumbing details where you need
+to have the event update the data, and then pass control to a function that
+changes the UI.  Not only does angular.js save that boilerplate, you end up
+with controller code that is much less tightly bound to the trivial details of
+your HTML markup.
+
+So what happens here is that when someone clicks on the 'join' button, that
+creates a websocket connection and sends some json across that looks like this:
+
+  { 'new': '$name' }
+
+Where $name is the value entered into the C<new_username> input box.  We also
+change the UI a bit, hide the Join button and replace it with a send message
+button.  That way after a person joins she can send messages.
+
+Let's now look at the action that handles that websocket, bi-directional 
+messaging:
+
+    sub ws :Path(/ws) {
+      my ($self, $ctx) = @_;
+      my $hs = Protocol::WebSocket::Handshake::Server->new_from_psgi($ctx->req->env);
+      my $hd = AnyEvent::Handle->new(
+        fh => $ctx->req->io_fh,
+        on_error => sub { warn "Error ".pop });
+
+      $hs->parse($hd->fh);
+      $hd->push_write($hs->to_string);
+      $hd->on_read(sub {
+        (my $frame = $hs->build_frame)->append($_[0]->rbuf);
+        while (my $message = $frame->next) {
+          my $decoded = decode_json $message;
+          if(my $user = $decoded->{new}) {
+            $decoded = {username=>$user, message=>"Joined!"};
+            foreach my $item ($self->history) {
+              $hd->push_write(
+                $hs->build_frame(buffer=>encode_json($item))
+                  ->to_bytes);
+            }            
+          } 
+
+          $self->add_to_history($decoded);
+          foreach my $client($self->clients) {
+            $client->push_write(
+              $hs->build_frame(buffer=>encode_json($decoded))
+                ->to_bytes);
+          }
+        }
+      });
+
+      $self->add_client($hd);
+    }
+
+So there's a lot going on, let's break it down:
+
+    sub ws :Path(/ws) {
+      my ($self, $ctx) = @_;
+
+This is just the normal Catalyst stuff, should be no surprises.
+
+      my $hs = Protocol::WebSocket::Handshake::Server->new_from_psgi($ctx->req->env);
+      my $hd = AnyEvent::Handle->new(
+        fh => $ctx->req->io_fh,
+        on_error => sub { warn "Error ".pop });
+
+You might recall us creating the server end of the websocket protocol from the
+echo example.  Again, this is a parser for the server end, not a server all by
+itself!  The second bit we bless the raw IO socket into an L<AnyEvent::Handle>
+and set a callback for coping with errors.
+
+      $hs->parse($hd->fh);
+      $hd->push_write($hs->to_string);
+
+This slurps up the start of the websocket request (it actually modifies the
+filehandle by sucking up all the HTTP lines and the call for upgrading to a
+websocket connection.)  We then add to the write queue the lines that are 
+the server side of the 'handshake', which basically informs the client that yes
+indeed we can do websockets and finalizes the communication.
+
+The next bit is a callback we install onto the websocket to handle read events
+(in other words the event that happens when the client sends some traffic over the
+websocket).
+
+      $hd->on_read(sub {
+        (my $frame = $hs->build_frame)->append($_[0]->rbuf);
+        while (my $message = $frame->next) {
+          my $decoded = decode_json $message;
+          if(my $user = $decoded->{new}) {
+            $decoded = {username=>$user, message=>"Joined!"};
+            foreach my $item ($self->history) {
+              $hd->push_write(
+                $hs->build_frame(buffer=>encode_json($item))
+                  ->to_bytes);
+            }            
+          } 
+
+Websockets are raw, so its up to you to declare your own data encoding and
+protocol.  Most people just use JSON since that's easy and also pretty compatible.
+Data comes down from the client in websocket frames, so you need to iterate over
+those frames.  Since I am sending everyone over one frame, I can just go ahead
+and decode the JSON, but there's nothing stopping you from building a more complex
+communication protocol.  Remeber, its just a socket, and its low level and raw!
+
+I'm looking for incoming messages from clients, but in the case where I see the
+C<new> key exists, that's the code for 'new connected user'.  So when that
+happens, we send a message like user => 'Joined!', and also we send to the newly
+joined user the full history of the chat.  Obviously this isn't going to scale
+but limiting it to the last 100 lines would also be easy to do.
+
+          $self->add_to_history($decoded);
+          foreach my $client($self->clients) {
+            $client->push_write(
+              $hs->build_frame(buffer=>encode_json($decoded))
+                ->to_bytes);
+          }
+
+Here we take the incoming message, add it to the history and the we iterate
+over all the connected clients and send the message.  Again, for very large
+numbers of connected clients you'd probably need to do something smarter here
+but this would be fine for even a few thousand connections.
+
+      $self->add_client($hd);
+    }
+
+In this last bit we make sure to add the just newly connected client to the big
+list of clients.
+
+Remember, this websocket stuff in L<Catalyst> is currently still new stuff, so
+yes there's not a lot of hand holding or sugar.  Nothing stopping us from adding
+that, if it turns out people are actually building applications!  But here you
+at least can give it a try!
 
 To see it all at once, here's the full controller all together:
 
@@ -196,7 +332,6 @@ To see it all at once, here's the full controller all together:
     use MooseX::MethodAttributes;
     use AnyEvent::Handle;
     use Protocol::WebSocket::Handshake::Server;
-    use Protocol::WebSocket::Frame;
     use JSON;
 
     extends 'Catalyst::Controller';
