@@ -12,32 +12,31 @@ Compared to conventional database search (and the full text query extensions fou
 
 =head2 Solr Basics
 
-Solr is a java servelet, implementing a web based interface to Lucene. Requests to Solr are made via http requests. Request data may be sent in either post or get values. Data is returned in json but Solr will also return data in xml or csv formats. Similarly posts of data to Solr may be in any of these formats. Lucene provides indexing and search technology, as well as spellchecking, hit highlighting and advanced analysis/tokenization capabilities. The Data Import Handler will allow you to import from lots of other sources rather than needing to post it all through web requests. Once up and going it gives you a lot of possibilities for finding documents. 
+Solr is a java servelet, implementing a web based interface to Lucene. Requests to Solr are made via HTTP requests. Request data may be sent in either POST or GET values. Data is returned in JSON but Solr will also return data in xml or CSV formats. Similarly POSTs of data to Solr may be in any of these formats. Lucene provides indexing and search technology, as well as spellchecking, hit highlighting and advanced analysis/tokenization capabilities. The Data Import Handler will allow you to import from lots of other sources rather than needing to POST it all through web requests. Once up and going it gives you a lot of possibilities for finding documents. 
 
-Solr runs in a java servelet answering http protocol requests on a designated port, 8983 by default. Operations are carried out by Get requests and by Post requests of either XML or JSON. Data returned is also in JSON or XML format. CSV and a few other formats are also supported for data. Large data sets are usually imported through the Data Import Handler (DIH) which can amongst other methods load a CSV file or query a SQL Database. The Server and the Collections (equivalent of a database) are configured through XML files. Solr does not include a crawling capability. The L<Nutch|http://nutch.apache.org/> utility or custom scripts are used in conjunction with Solr for crawling.
+Solr runs in a java servelet answering HTTP protocol requests on a designated port, 8983 by default. Operations are carried out by Get requests and by Post requests of either XML or JSON. Data returned is also in JSON or XML format. CSV and a few other formats are also supported for data. Large data sets are usually imported through the Data Import Handler (DIH) which can among other methods load a CSV file or query a SQL database. The Server and the Collections (equivalent of a database) are configured through XML files. Solr does not include a crawling capability. The L<Nutch|http://nutch.apache.org/> utility or custom scripts are used in conjunction with Solr for crawling.
 
-Requests to solr can be made through a web browser or any utility such as wget, curl or LWP scripts that implements the http protocol. Each request is independent of all others, there is no session or handshake, Solr recieves a request via http and responds to it. The Solr Server also provides a web interface, anyone who can access the interface, can access all of its features. This has obvious architectural implications in securing solr, because security must be implemented at either the network level or by placing solr behind another webserver which implements security. Normally Solr is not directly exposed to the public internet.
+Requests to Solr can be made through a web browser or any utility such as wget, curl or LWP scripts that implements the HTTP protocol. Each request is independent of all others, there is no session or handshake, Solr recieves a request via HTTP and responds to it. The Solr Server also provides a web interface, anyone who can access the interface, can access all of its features. This has obvious architectural implications in securing solr, because security must be implemented at either the network level or by placing Solr behind another webserver which implements security. Normally Solr is not directly exposed to the public internet.
 
 =head2 Alternatives To Solr
 
-The most obvious alternative to Solr is direct implementation of Lucene. Since the purpose of Solr is to provide a more useable interface to Lucene in the first place, this is not good way for novices to get started. An Alternative to Solr that is also built on Lucene is L<ElasticSearch|http://www.elasticsearch.org>. At this time there is far more written about Solr and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under active development. 
+The most obvious alternative to Solr is direct implementation of Lucene. Since the purpose of Solr is to provide a more useable interface to Lucene in the first place, this is not a good way for novices to get started. An Alternative to Solr that is also built on Lucene is L<ElasticSearch|http://www.elasticsearch.org>. At this time there is far more written about Solr and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under active development. 
 
 =head3 Commercial Alternatives
 
-Google Search Appliances offerings are expensive and have a lot of functionality limitations, Google also has a cloud based search offering, with considerably less features than the appliance. The cheap google alternative is to point your visitors at google.com with a site qualifier in the redirect (or any other public search engine). For a lot of developers the AWS CloudSearch service is going to be of great interest, while not free as Solr is, the administrative costs will for most enterprises make it the cheaper choice vs Solr and it appears to be priced much lower than Google Appliances, on the downside it has a far more limited feature set than Solr and does not offer the option of going under the hood as Lucene provides to Solr. 
+Google's Search Appliances are expensive and have a lot of functionality up to a point (with a number of third party add ons that may extend functionality), Google also has a cloud based search offering, with considerably less features than the appliance. The cheap Google alternative is to point your visitors at google.com (or any other public search engine) with a site qualifier in the redirect. For a lot of developers the AWS CloudSearch service is going to be of great interest, while not free as Solr is, the administrative costs will for most enterprises make it the cheaper choice vs Solr and it appears to be priced lower than Google Appliances, on the downside it has a more limited feature set than Solr. 
 
 =head2 Perl Modules for Solr
 
-There are a number of Perl Modules available for Solr, the two that appear the most viable are Apache::Solr and WebService::Solr. Unfortunately,
-all of the modules have problems both in bugs and unimplemented features. Initally I had the best luck with Apache::Solr but ran into some limitations there. After reading through the source code for several of the modules, I decided to work with WebService::Solr. At present it looks like Apache::Solr is being more actively developed so in the future it could become the better choice. 
+There are a number of Perl Modules available for Solr, the two that appear the most viable are Apache::Solr and WebService::Solr. Unfortunately, all of the modules have problems both in bugs and unimplemented features. Initally I had the best luck with Apache::Solr but ran into some limitations there. After reading through the source code for several of the modules, I decided to work with WebService::Solr. At present it looks like Apache::Solr is being more actively developed so in the future it could become the better choice. 
 
-A lot of Perl's Solr users prefer to implement their own Agent/Model. Since the Solr interface is based on http requests, JSON and XML, this is not hard so much as potentially time-consuming. 
+A lot of Perl's Solr users prefer to implement their own Agent/Model. Since the Solr interface is based on HTTP requests, JSON and XML, this is not hard so much as potentially time-consuming. 
 
 =head1 Preparing the Environment
 
-You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and Catalyst::Model::WebService::Solr. Day One of this Advent Calendar discussed the enhancements in 5.90050, for our purposes the improved UTF8 handling is a Critical Feature and resolves a showstopper bug. When I first looked at WebService::Solr Wide Character Explosions really stymied my first sessions. If updating Catalyst isn't an option for you the workaround I was using is detailed in rtcpan bug 89288. I also strongly recommend using the latest Perl. 
+You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and Catalyst::Model::WebService::Solr. Day One of this Advent Calendar discussed the enhancements in 5.90050, for our purposes the improved UTF8 handling is a Critical Feature and resolves a showstopper bug. When I first looked at WebService::Solr "Wide Character on Print" really stymied my first sessions. If updating Catalyst isn't an option for you the workaround I was using is detailed in rtcpan bug 89288. 
 
-You will also need to install a JVM like open JDK and then download a copy of Solr from L<http://lucene.apache.org/solr/downloads.html|http://lucene.apache.org/solr/downloads.html>.  Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I'll refer you to the L<Solr tutorial|http://lucene.apache.org/solr/tutorial.html>, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have solr running locally with the test data loaded and answering the default port 8983.
+You will also need to install a JVM like open JDK and then download a copy of Solr from L<http://lucene.apache.org/solr/downloads.html|http://lucene.apache.org/solr/downloads.html>.  Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I'll refer you to the L<Solr tutorial|http://lucene.apache.org/solr/tutorial.html>, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have Solr running locally with the test data loaded and answering the default port 8983.
  
  Terminal 1
  cd ..path_to../example
@@ -53,11 +52,11 @@ You will also need to install a JVM like open JDK and then download a copy of So
  cd SolrDemo
  ./script/solrdemo_create.pl view HTML TT
 
-Edit the SolrDemo.conf files
+Edit SolrDemo.conf
 
  solrserver         http://localhost:8983/solr/collection1
 
-Edit the config section of lib/SolrDemo.pm and add C<encoding => 'utf8',> to prevent wide character errors.
+Edit the config section of lib/SolrDemo.pm and add B<encoding =E<gt> 'utf8',> to prevent wide character errors.
 
  __PACKAGE__->config(
     name => 'SolrDemo',
@@ -66,10 +65,10 @@ Edit the config section of lib/SolrDemo.pm and add C<encoding => 'utf8',> to pre
     enable_catalyst_header => 1, # Send X-Catalyst header    
     encoding => 'utf8', # prevents wide character explosions
     'View::HTML' => {  #Set the location for TT files        
-         INCLUDE_PATH => [ CalEvt->path_to( 'root' ), ], },    
+         INCLUDE_PATH => [ SolrDemo->path_to( 'root' ), ], },    
  );
 
-Create the additional files we'll need
+Create some additional files we'll need
 
  touch lib/SolrDemo/Model/Solr.pm
  touch lib/SolrDemo/Model/SolrModelSolr.pm
@@ -78,7 +77,7 @@ Create the additional files we'll need
  touch root/results.tt
  touch t/model_solr.t
 
-In addition I recommend creating a reset script in the example/exampledocs folder of the solr distribution. This script will delete your collection and replace it with the sample docs when you are testing CRUD operations. 
+In addition I recommend creating a reset script in the example/exampledocs folder of the Solr distribution. This script will delete your collection and replace it with the sample docs when you are testing CRUD operations. 
 
  wget "http://localhost:8983/solr/update?stream.body=<delete><query>*:*</query></delete>" -O /dev/null
  wget "http://localhost:8983/solr/update?stream.body=<commit/>" -O /dev/null 
@@ -86,7 +85,7 @@ In addition I recommend creating a reset script in the example/exampledocs folde
 
 =head1 A Thin Model with Catalyst::Model::WebService::Solr
 
-There are only two options to configure, where to connect and autocommit. By default solr may not immediately reflect changes to data, and the autocommit flag tells WebService::Solr to always follow delete/add operations with a commit request. You might want to turn it off if you were writing batches of data and wanted to commit at the end of the batch for performance purposes.
+There are only two options to configure, where to connect and autocommit. By default Solr may not immediately reflect changes to data, and the autocommit flag tells WebService::Solr to always follow delete/add operations with a commit request. You might want to turn it off if you were writing batches of data and wanted to commit at the end of the batch for performance purposes.
 
 File: lib/SolrDemo/Model/SolrModelSolr
 
@@ -161,15 +160,15 @@ File: lib/SolrDemo/Controller/Thin.pm
 
 =head3 response2info
 
-The response2info sub consolidates code that would have been repeated by both methods, this is view code but for convenience it went here. What we're doing with this method is a raw dump of everything returned by WebService::Solr. 
+This is Viewish code shared by two of the methods that puts the raw elements of the response into a string. 
 
 =head3 dump
 
-Executes a query for all records in the solr database. Notice that we need WebService::Solr::Query to help generate queries, I've proposed a shortcut for what you see in the first argument. To generate the query you need to pass a hashref of the solr fields you want and the values for the fields, the \ indicates to pass the second * as a literal string. The second argument is a hashref of options, here we need to override the solr default of returning 10 rows by specifying an arbitrary high value.
+Executes a query for all records in the Solr database. WebService::Solr::Query generates queries. To generate the query you need to pass a hashref of the Solr fields you want and the values for the fields, the \ indicates to pass the second * as a literal string. The second argument is a hashref of options, here we want to override the Solr default of returning 10 rows by specifying an arbitrary high value.
 
 =head3 example
 
-This example query is hard coded to find items matching the phrase 'hard drive', which, we see from the spew, gets translated as 'hard+drive'. Here we specified the field text (which is a catch-all field defined to hold everything searchable) and passed an array ref to the list of values. If you copy and rename the method and then change the field list to C<['hard drive','maxtor']>, you will find that you still get the same 2 records, this is because of solr's matching behaviour. If you want to filter for only maxtor hard drives you'll need to use a filter query (fq) which is specified in the options.
+This example query is hard coded to find items matching the phrase 'hard drive', which, we see from the spew, gets translated as 'hard+drive'. Here we specified the field text (which is a catch-all field defined to hold everything searchable) and passed an array ref to the list of values. If you copy and rename the method and then change the field list to B<['hard drive','maxtor']>, you will find that you still get the same 2 records, this is because of solr's matching behaviour. If you want to filter for only maxtor hard drives you'll need to use a filter query (fq) which is specified in the options.
 
 Add the following method to Thin.pm
 
@@ -217,13 +216,21 @@ File: /root/results.tt
     [% END %]
     </table>
 
-Try some queries: http://localhost:3000/thin/select/text/ipod  http://localhost:3000/thin/select/features/cache http://localhost:3000/thin/select/manu/maxtor
+Try some queries: 
 
-First the model returns a WebService::Solr::Response object, we use the docs method to extract an array of WebService::Solr::Document objects from it which are then passed by reference to the view. The view iterates the array and uses the C<fieldnames> method to get a list of the fields in that document (not all documents in the test data have the same fields) and then iterates through it finally retrieving individual fields with the C<value_for method>.
+=over
+
+=item http://localhost:3000/thin/select/text/ipod  
+=item http://localhost:3000/thin/select/features/cache 
+=item http://localhost:3000/thin/select/manu/maxtor
+
+=back
+
+First the model returns a WebService::Solr::Response object, we use the docs method to extract an array of WebService::Solr::Document objects from it which are then passed by reference to the view. The view iterates the array and uses the B<fieldnames> method to get a list of the fields in that document (not all documents in the test data have the same fields) and then iterates through it, finally retrieving individual fields with the B<value_for method>.
 
 =head1 Moving to a Fat Model
 
-My solr search queries typically require a lot of supporting code, which is easier to test in a model than a controller, and is generally more appropriate to the model. Unlike DBI based models which maintain a connection, each request to solr is completely independent of all others and no connection is maintained between them, so instantiating a new WebService::Solr object is relatively trivial, additionally if you work with multiple collections you need to create a seperate object for each one. 
+My Solr search queries typically require a lot of supporting code, which is easier to test in a model than a controller, and is generally more appropriate to the model. Unlike DBI-based models which maintain a connection, each request to Solr is completely independent of all others and no connection is maintained between them, so instantiating a new WebService::Solr object is relatively trivial, additionally if you work with multiple collections you need to create a seperate object for each one. 
 
 lib/SolrDemo/Model/Solr.pm
 
@@ -319,7 +326,9 @@ lib/SolrDemo/Controller/Fat.pm
 
     1;
 
-The Model contains 3 methods. The private method generates a geofilter string, because that isn't currently implemented in WebService::Solr, but I've proposed it for a future release. Of the other two methods the first replicates the select we used in the thin model and the third finds things near the Kimmel Center in Philadelphia as an example of geospatial search.
+The Model contains 3 methods. The private method generates a geofilter string, because that isn't currently implemented in WebService::Solr, but I've proposed it for a future release. Of the other two methods the first replicates the select we used in the thin model and the third finds things near the Kimmel Center in Philadelphia as an example of geospatial search. 
+
+A couple of times now we've seen B<WebService::Solr::Query-E<gt>new( { '*' =E<gt> \'*' } )>. If you go back to the first dump methods you can see it ended up as B<(*%3A*)>, B<%3A> translates back to 'B<:>'. You could use the string B<'(*:*)'> instead of generating the value with Query. Modify the Kimmel method to demonstrate this yourself. In this special case we wanted to preseve the value '*' as a literal, not risk having it converted to B<%2A>, which we requested by passing it as a reference. For this case it might be clearer to just use the string directly in your query, but generally I'd rather use WebService::Solr::Query and have it worry about the Solr Query String Grammar. WebService::Solr::Query can generate complex nested queries with numerous options beyond the scope of this introduction. 
 
 You should now be able to run the tests, and if they work when you run the test server, /fat/select/?/? will work as it did in the thin model, and /fat/nearkimmel will show you results of a geospatial filter.
 
@@ -331,9 +340,9 @@ Two methods get added to the model, Delete and Add (which is also the update met
 
 =head2 Add
 
-Add and Update are the same method. When a document is added with the same id as an existing document solr replaces the original record with the new one. This means whenever we update a record we need to send the entire new version. 
+Add and Update are the same method. When a document is added with the same id as an existing document, Solr replaces the original record with the new one. This means whenever we update a record we need to send the entire new version. 
 
-The Add method takes a hashref of fieldnames and values which it uses to create a WebService::Solr::Document. There is an optional parameter to the WebService::Solr->add method for setting boost values on fields, the Add method of our Model does not implement it. A WebService::Solr::Document can be created in 3 ways, first it can be returned by a query to Solr, second it can be constructed from arrays of WebService::Solr::Field objects, and finally we can pass an array of array references to the constructructor.  
+The Add method takes a hashref of fieldnames and values which it uses to create a WebService::Solr::Document. There is an optional parameter to the WebService::Solr->add method for setting boost values on fields, this is not implemented in our Model. A WebService::Solr::Document can be created in 3 ways, first it can be returned by a query to Solr, second it can be constructed from arrays of WebService::Solr::Field objects, and finally we can pass an array of array references to the constructructor.  
 
 Here is an example of a data structure to create a WebService::Solr::Document. 
 
