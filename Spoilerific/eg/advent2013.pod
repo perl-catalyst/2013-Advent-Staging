@@ -174,4 +174,4 @@ I hope you've found some value in this short tour through a small Catalyst appli
 
 =head1 Author
 
-Jason McIntosh  (L<@jmacdotorg|http://twitter.com/jmacdotorg> on Twitter, jmac on IRC)
+Jason McIntosh L<jmac@jmac.org|mailto:jmac@jmac.org> (L<@jmacdotorg|http://twitter.com/jmacdotorg> on Twitter, jmac on IRC)
