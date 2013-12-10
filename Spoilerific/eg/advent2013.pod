@@ -25,7 +25,7 @@ It was fun to make, and I hope its guts serve as a tidy example of a small and f
 
 The simplest answer as to why I chose Catalyst is the least interesting one: it's what I know! I've been using Catalyst both in L<my consulting day-job|http://appleseed-sc.com> and with hobby projects for several years.
 
-However, A small and well-defined hobby-project like Spoilerific can be a perfect opportunity to explore new software-creation tools and techniques. Catalyst's feisty younger cousins L<Dancer|https://metacpan.org/pod/Dancer> and L<Mojolicious|https://metacpan.org/pod/Mojolicious> called to me to try them, learning their ways by building a simple but non-trivial project like this. 
+However, a small and well-defined hobby project like Spoilerific can be a perfect opportunity to explore new software-creation tools and techniques. Catalyst's feisty younger cousins L<Dancer|https://metacpan.org/pod/Dancer> and L<Mojolicious|https://metacpan.org/pod/Mojolicious> called to me to try them, learning their ways by building a simple but non-trivial project like this. 
 
 Someday, I will answer those calls! But in this case, I also happened that I remained mere months into teaching myself L<Moose|https://metacpan.org/pod/Moose>, with only a single significant Moose-driven project under my belt -- and not even one that used a database. (Yes, I was already an accidental Moose user by dint of our ungulate friend powering Catalyst's core, but that's a world apart from boldly writing C<use Moose;> and then knowing what to do with it.) Spoilerific clearly wanted to run on a classic LAMP stack, a trough to which I had yet to truly lead a Moose of my own. 
 
