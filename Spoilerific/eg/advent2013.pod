@@ -23,7 +23,7 @@ It was fun to make, and I hope its guts serve as a tidy example of a small and f
 
 =head2 Why Catalyst?
 
-The simplest answer as to why I chose Catalyst is the least interesting one: it's what I know! I've been using Catalyst both in [my consulting day-job] and with hobby projects for several years.
+The simplest answer as to why I chose Catalyst is the least interesting one: it's what I know! I've been using Catalyst both in L<my consulting day-job|http://appleseed-sc.com> and with hobby projects for several years.
 
 However, A small and well-defined hobby-project like Spoilerific can be a perfect opportunity to explore new software-creation tools and techniques. Catalyst's feisty younger cousins L<Dancer|https://metacpan.org/pod/Dancer> and L<Mojolicious|https://metacpan.org/pod/Mojolicious> called to me to try them, learning their ways by building a simple but non-trivial project like this. 
 
