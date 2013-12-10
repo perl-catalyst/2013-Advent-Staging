@@ -465,4 +465,6 @@ In this article we created both Thin and Fat Models for WebService::Solr. For th
 
 John Karr <brainbuz@brainbuz.org> brainbuz
 
+Thanks to Andy Lester for taking time to review this article and make a few helpful recommendations.
+
 =cut
