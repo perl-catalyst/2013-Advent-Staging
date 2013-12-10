@@ -17,11 +17,6 @@
   <li><a href="#INTRODUCTION">INTRODUCTION</a>
     <ul>
       <li><a href="#Solr-Basics">Solr Basics</a></li>
-      <li><a href="#Alternatives-To-Solr">Alternatives To Solr</a>
-        <ul>
-          <li><a href="#Commercial-Alternatives">Commercial Alternatives</a></li>
-        </ul>
-      </li>
       <li><a href="#Perl-Modules-for-Solr">Perl Modules for Solr</a></li>
     </ul>
   </li>
@@ -65,19 +60,11 @@
 
 <h2 id="Solr-Basics">Solr Basics</h2>
 
-<p>Solr is a java servelet, implementing a web based interface to Lucene. Requests to Solr are made via HTTP requests. Request data may be sent in either POST or GET values. Data is returned in JSON but Solr will also return data in xml or CSV formats. Similarly POSTs of data to Solr may be in any of these formats. Lucene provides indexing and search technology, as well as spellchecking, hit highlighting and advanced analysis/tokenization capabilities. The Data Import Handler will allow you to import from lots of other sources rather than needing to POST it all through web requests. Once up and going it gives you a lot of possibilities for finding documents.</p>
+<p>Solr is a java servlet, implementing a web based interface to Lucene. Requests to Solr are made via HTTP requests. Request data may be sent in either POST or GET values. Data is returned in JSON but Solr will also return data in xml or CSV formats. Similarly POSTs of data to Solr may be in any of these formats. Lucene provides indexing and search technology, as well as spellchecking, hit highlighting and advanced analysis/tokenization capabilities. The Data Import Handler will allow you to import from lots of other sources rather than needing to POST it all through web requests. Once up and going it gives you a lot of possibilities for finding documents.</p>
 
 <p>Solr runs in a java servelet answering HTTP protocol requests on a designated port, 8983 by default. Operations are carried out by Get requests and by Post requests of either XML or JSON. Data returned is also in JSON or XML format. CSV and a few other formats are also supported for data. Large data sets are usually imported through the Data Import Handler (DIH) which can among other methods load a CSV file or query a SQL database. The Server and the Collections (equivalent of a database) are configured through XML files. Solr does not include a crawling capability. The <a href="http://nutch.apache.org/">Nutch</a> utility or custom scripts are used in conjunction with Solr for crawling.</p>
 
 <p>Requests to Solr can be made through a web browser or any utility such as wget, curl or LWP scripts that implements the HTTP protocol. Each request is independent of all others, there is no session or handshake, Solr recieves a request via HTTP and responds to it. The Solr Server also provides a web interface, anyone who can access the interface, can access all of its features. This has obvious architectural implications in securing solr, because security must be implemented at either the network level or by placing Solr behind another webserver which implements security. Normally Solr is not directly exposed to the public internet.</p>
-
-<h2 id="Alternatives-To-Solr">Alternatives To Solr</h2>
-
-<p>The most obvious alternative to Solr is direct implementation of Lucene. Since the purpose of Solr is to provide a more useable interface to Lucene in the first place, this is not a good way for novices to get started. An Alternative to Solr that is also built on Lucene is <a href="http://www.elasticsearch.org">ElasticSearch</a>. At this time there is far more written about Solr and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under active development.</p>
-
-<h3 id="Commercial-Alternatives">Commercial Alternatives</h3>
-
-<p>Google&#39;s Search Appliances are expensive and have a lot of functionality up to a point (with a number of third party add ons that may extend functionality), Google also has a cloud based search offering, with considerably less features than the appliance. The cheap Google alternative is to point your visitors at google.com (or any other public search engine) with a site qualifier in the redirect. For a lot of developers the AWS CloudSearch service is going to be of great interest, while not free as Solr is, the administrative costs will for most enterprises make it the cheaper choice vs Solr and it appears to be priced lower than Google Appliances, on the downside it has a more limited feature set than Solr.</p>
 
 <h2 id="Perl-Modules-for-Solr">Perl Modules for Solr</h2>
 
@@ -89,7 +76,7 @@
 
 <p>You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and Catalyst::Model::WebService::Solr. Day One of this Advent Calendar discussed the enhancements in 5.90050, for our purposes the improved UTF8 handling is a Critical Feature and resolves a showstopper bug. When I first looked at WebService::Solr &quot;Wide Character on Print&quot; really stymied my first sessions. If updating Catalyst isn&#39;t an option for you the workaround I was using is detailed in rtcpan bug 89288.</p>
 
-<p>You will also need to install a JVM like open JDK and then download a copy of Solr from <a href="http://lucene.apache.org/solr/downloads.html">http://lucene.apache.org/solr/downloads.html</a>. Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I&#39;ll refer you to the <a href="http://lucene.apache.org/solr/tutorial.html">Solr tutorial</a>, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have Solr running locally with the test data loaded and answering the default port 8983.</p>
+<p>You will also need to install a JVM like open JDK and then download a copy of Solr from the <a href="http://lucene.apache.org/solr/downloads.html">Solr Download Page</a>. Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I&#39;ll refer you to the <a href="http://lucene.apache.org/solr/tutorial.html">Solr tutorial</a>, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have Solr running locally with the test data loaded and answering the default port 8983.</p>
 
 <pre><code> Terminal 1
  cd ..path_to../example
@@ -234,8 +221,7 @@
             { rows =&gt; 10000, fq =&gt; $maxq } );
         my $pre = &amp;response2info($response);
         $c-&gt;response-&gt;body(&quot;&lt;pre&gt;$pre &lt;/pre&gt;&quot;);
-    } 
-    </code></pre>
+    } </code></pre>
 
 <h3 id="a-real-search">a real search</h3>
 
@@ -272,15 +258,20 @@
 
 <p>Try some queries:</p>
 
-<dl>
+<ul>
 
-<dt id="http:-localhost:3000-thin-select-text-ipod-item-http:-localhost:3000-thin-select-features-cache-item-http:-localhost:3000-thin-select-manu-maxtor">http://localhost:3000/thin/select/text/ipod =item http://localhost:3000/thin/select/features/cache =item http://localhost:3000/thin/select/manu/maxtor</dt>
-<dd>
+<li><p>http://localhost:3000/thin/select/text/ipod</p>
 
-</dd>
-</dl>
+</li>
+<li><p>http://localhost:3000/thin/select/features/cache</p>
 
-<p>First the model returns a WebService::Solr::Response object, we use the docs method to extract an array of WebService::Solr::Document objects from it which are then passed by reference to the view. The view iterates the array and uses the <b>fieldnames</b> method to get a list of the fields in that document (not all documents in the test data have the same fields) and then iterates through it, finally retrieving individual fields with the <b>value_for method</b>.</p>
+</li>
+<li><p>http://localhost:3000/thin/select/manu/maxtor</p>
+
+</li>
+</ul>
+
+<p>First the model returns a WebService::Solr::Response object, we use the docs method to extract an array of WebService::Solr::Document objects from it which are then passed by reference to the view. The view iterates the array and uses the <b>fieldnames</b> method to get a list of the fields in that document (not all documents in the test data have the same fields) and then iterates through it, retrieving the individual fields with the <b>value_for method</b>.</p>
 
 <h1 id="Moving-to-a-Fat-Model">Moving to a Fat Model</h1>
 

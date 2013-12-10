@@ -12,19 +12,11 @@ Compared to conventional database search (and the full text query extensions fou
 
 =head2 Solr Basics
 
-Solr is a java servelet, implementing a web based interface to Lucene. Requests to Solr are made via HTTP requests. Request data may be sent in either POST or GET values. Data is returned in JSON but Solr will also return data in xml or CSV formats. Similarly POSTs of data to Solr may be in any of these formats. Lucene provides indexing and search technology, as well as spellchecking, hit highlighting and advanced analysis/tokenization capabilities. The Data Import Handler will allow you to import from lots of other sources rather than needing to POST it all through web requests. Once up and going it gives you a lot of possibilities for finding documents. 
+Solr is a java servlet, implementing a web based interface to Lucene. Requests to Solr are made via HTTP requests. Request data may be sent in either POST or GET values. Data is returned in JSON but Solr will also return data in xml or CSV formats. Similarly POSTs of data to Solr may be in any of these formats. Lucene provides indexing and search technology, as well as spellchecking, hit highlighting and advanced analysis/tokenization capabilities. The Data Import Handler will allow you to import from lots of other sources rather than needing to POST it all through web requests. Once up and going it gives you a lot of possibilities for finding documents. 
 
 Solr runs in a java servelet answering HTTP protocol requests on a designated port, 8983 by default. Operations are carried out by Get requests and by Post requests of either XML or JSON. Data returned is also in JSON or XML format. CSV and a few other formats are also supported for data. Large data sets are usually imported through the Data Import Handler (DIH) which can among other methods load a CSV file or query a SQL database. The Server and the Collections (equivalent of a database) are configured through XML files. Solr does not include a crawling capability. The L<Nutch|http://nutch.apache.org/> utility or custom scripts are used in conjunction with Solr for crawling.
 
 Requests to Solr can be made through a web browser or any utility such as wget, curl or LWP scripts that implements the HTTP protocol. Each request is independent of all others, there is no session or handshake, Solr recieves a request via HTTP and responds to it. The Solr Server also provides a web interface, anyone who can access the interface, can access all of its features. This has obvious architectural implications in securing solr, because security must be implemented at either the network level or by placing Solr behind another webserver which implements security. Normally Solr is not directly exposed to the public internet.
-
-=head2 Alternatives To Solr
-
-The most obvious alternative to Solr is direct implementation of Lucene. Since the purpose of Solr is to provide a more useable interface to Lucene in the first place, this is not a good way for novices to get started. An Alternative to Solr that is also built on Lucene is L<ElasticSearch|http://www.elasticsearch.org>. At this time there is far more written about Solr and I did not experiment with ElasticSearch. There is an official Elasticsearch module on CPAN which seems to be under active development. 
-
-=head3 Commercial Alternatives
-
-Google's Search Appliances are expensive and have a lot of functionality up to a point (with a number of third party add ons that may extend functionality), Google also has a cloud based search offering, with considerably less features than the appliance. The cheap Google alternative is to point your visitors at google.com (or any other public search engine) with a site qualifier in the redirect. For a lot of developers the AWS CloudSearch service is going to be of great interest, while not free as Solr is, the administrative costs will for most enterprises make it the cheaper choice vs Solr and it appears to be priced lower than Google Appliances, on the downside it has a more limited feature set than Solr. 
 
 =head2 Perl Modules for Solr
 
@@ -36,8 +28,8 @@ A lot of Perl's Solr users prefer to implement their own Agent/Model. Since the 
 
 You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and Catalyst::Model::WebService::Solr. Day One of this Advent Calendar discussed the enhancements in 5.90050, for our purposes the improved UTF8 handling is a Critical Feature and resolves a showstopper bug. When I first looked at WebService::Solr "Wide Character on Print" really stymied my first sessions. If updating Catalyst isn't an option for you the workaround I was using is detailed in rtcpan bug 89288. 
 
-You will also need to install a JVM like open JDK and then download a copy of Solr from L<http://lucene.apache.org/solr/downloads.html|http://lucene.apache.org/solr/downloads.html>.  Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I'll refer you to the L<Solr tutorial|http://lucene.apache.org/solr/tutorial.html>, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have Solr running locally with the test data loaded and answering the default port 8983.
- 
+You will also need to install a JVM like open JDK and then download a copy of Solr from the L<Solr Download Page|http://lucene.apache.org/solr/downloads.html>.  Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I'll refer you to the L<Solr tutorial|http://lucene.apache.org/solr/tutorial.html>, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have Solr running locally with the test data loaded and answering the default port 8983.
+
  Terminal 1
  cd ..path_to../example
  java -jar start.jar
@@ -182,7 +174,7 @@ Add the following method to Thin.pm
         my $pre = &response2info($response);
         $c->response->body("<pre>$pre </pre>");
     } 
-    
+
 =head3 a real search
 
 Add this method to: Thin.pm
@@ -220,13 +212,18 @@ Try some queries:
 
 =over
 
-=item http://localhost:3000/thin/select/text/ipod  
-=item http://localhost:3000/thin/select/features/cache 
-=item http://localhost:3000/thin/select/manu/maxtor
+=item *
+http://localhost:3000/thin/select/text/ipod  
+
+=item *
+http://localhost:3000/thin/select/features/cache 
+
+=item *
+http://localhost:3000/thin/select/manu/maxtor
 
 =back
 
-First the model returns a WebService::Solr::Response object, we use the docs method to extract an array of WebService::Solr::Document objects from it which are then passed by reference to the view. The view iterates the array and uses the B<fieldnames> method to get a list of the fields in that document (not all documents in the test data have the same fields) and then iterates through it, finally retrieving individual fields with the B<value_for method>.
+First the model returns a WebService::Solr::Response object, we use the docs method to extract an array of WebService::Solr::Document objects from it which are then passed by reference to the view. The view iterates the array and uses the B<fieldnames> method to get a list of the fields in that document (not all documents in the test data have the same fields) and then iterates through it, retrieving the individual fields with the B<value_for method>.
 
 =head1 Moving to a Fat Model
 
