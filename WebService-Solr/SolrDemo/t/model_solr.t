@@ -49,7 +49,10 @@ sub listdoc {
       . $d->value_for('id') . ' -- '
       . $d->value_for('name')
       . ' Manu: '
-      . $d->value_for('manu') . "\n\t"
+      
+      . $d->value_for('name')
+      . ' Price: $$$'
+      . $d->value_for('price') . "\n\t"
       . $d->value_for('features');
     return $string;
 }
@@ -86,9 +89,11 @@ is( scalar( @zunedocs ) , 0, 'Confirm it is deleted' );
 
 # This test deletes data, after running it you must reset your data.
 # Comment it or skip it to avoid.
+SKIP: {
+    skip "This test is skipped because it deletes half your data.", 1 ;
 my @before = $C->model('Solr')->List( { '*' => \'*' } );
 my $delete2 = $C->model('Solr')->Delete( { cat => 'electronics' } );
 my @after = $C->model('Solr')->List( { '*' => \'*' } );
 is( scalar(@after) , 18, "There were 32 documents, there are now 18");
-
+};
 done_testing();

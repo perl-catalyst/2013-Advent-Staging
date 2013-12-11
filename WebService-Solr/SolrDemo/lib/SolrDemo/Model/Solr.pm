@@ -30,7 +30,7 @@ sub Kimmel {
     my $kimmelcenter = '39.95,-75.16';
     my $mainquery    = WebService::Solr::Query->new( { '*' => \'*' } );
     my $geofilt      = &_GeoFilter( $kimmelcenter, 'store', $distance );
-    my %options      = ( rows => 100, fq => $geofilt );
+    my %options      = ( rows => 100, fq => $geofilt, sort => 'price asc' );
     my $response     = $SOLR->search( $mainquery, \%options );
     return $response->docs;
 }

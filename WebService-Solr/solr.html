@@ -311,7 +311,7 @@
         my $kimmelcenter = &#39;39.95,-75.16&#39;;
         my $mainquery    = WebService::Solr::Query-&gt;new( { &#39;*&#39; =&gt; \&#39;*&#39; } );
         my $geofilt      = &amp;_GeoFilter( $kimmelcenter, &#39;store&#39;, $distance );
-        my %options      = ( rows =&gt; 100, fq =&gt; $geofilt );
+        my %options      = ( rows =&gt; 100, fq =&gt; $geofilt, sort =&gt; &#39;price asc&#39; );
         my $response     = $SOLR-&gt;search( $mainquery, \%options );
         return $response-&gt;docs;
     }
@@ -373,7 +373,9 @@
 
 <p>The Model contains 3 methods. The private method generates a geofilter string, because that isn&#39;t currently implemented in WebService::Solr, but I&#39;ve proposed it for a future release. Of the other two methods the first replicates the select we used in the thin model and the third finds things near the Kimmel Center in Philadelphia as an example of geospatial search.</p>
 
-<p>A couple of times now we&#39;ve seen <b>WebService::Solr::Query-&gt;new( { &#39;*&#39; =&gt; \&#39;*&#39; } )</b>. If you go back to the first dump methods you can see it ended up as <b>(*%3A*)</b>, <b>%3A</b> translates back to &#39;<b>:</b>&#39;. You could use the string <b>&#39;(*:*)&#39;</b> instead of generating the value with Query. Modify the Kimmel method to demonstrate this yourself. In this special case we wanted to preseve the value &#39;*&#39; as a literal, not risk having it converted to <b>%2A</b>, which we requested by passing it as a reference. For this case it might be clearer to just use the string directly in your query, but generally I&#39;d rather use WebService::Solr::Query and have it worry about the Solr Query String Grammar. WebService::Solr::Query can generate complex nested queries with numerous options beyond the scope of this introduction.</p>
+<p>A couple of times now we&#39;ve seen <b>WebService::Solr::Query-&gt;new( { &#39;*&#39; =&gt; \&#39;*&#39; } )</b>. If you go back to the first dump methods you can see it ended up as <b>(*%3A*)</b>, <b>%3A</b> translates back to &#39;<b>:</b>&#39;. You could use the string <b>&#39;(*:*)&#39;</b> instead of generating the value with Query. Modify the Kimmel method to demonstrate this yourself. In this special case we wanted to preseve the value &#39;*&#39; as a literal, not risk having it converted to <b>%2A</b>, which we accomplished by passing it as a reference. For this case it might be clearer to just use the string directly in your query, but generally I&#39;d rather use WebService::Solr::Query and have it worry about the details of Solr Grammar. WebService::Solr::Query is capable of generating complex queries with numerous options beyond the scope of this introduction.</p>
+
+<p>I also added in the %options of the Kimmel method a third option, sort. The sort option takes two arguments, a field_name and either &#39;asc&#39; or &#39;desc&#39;.</p>
 
 <p>You should now be able to run the tests, and if they work when you run the test server, /fat/select/?/? will work as it did in the thin model, and /fat/nearkimmel will show you results of a geospatial filter.</p>
 
