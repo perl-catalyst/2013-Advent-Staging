@@ -457,7 +457,7 @@ Add to t/model_solr.t immediately above done_testing
 
 After following this how-to document you'll want to read the WebService::Solr Documentation. It is organized by sub-module so you'll have to read all of the pieces, plus the tests from the distribution which are where you'll find code examples. You'll also want to read the Solr Documentation, there is a lot more on the web about it than the module.
 
-If there are any errata to this article they will be posted on my L<technical blog|http://techinfo.brainbuz.org/>. You can download the entire contents and source for this article as well L<http://www.brainbuz.org/docs/adv2013solr.tgz>.
+If there are any errata to this article they will be posted on my L<technical blog|http://techinfo.brainbuz.org/?p=368>. You can download the entire contents and source for this article as well L<http://www.brainbuz.org/images/solrcattut.tgz>.
 
 =head1 Summary
 
