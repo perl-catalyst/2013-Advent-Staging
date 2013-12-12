@@ -1,0 +1,67 @@
+<?xml version="1.0" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title></title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rev="made" href="mailto:root@maya.(none)" />
+</head>
+
+<body style="background-color: white">
+
+
+
+<ul id="index">
+  <li><a href="#TITLE">TITLE</a></li>
+  <li><a href="#OVERVIEW">OVERVIEW</a></li>
+  <li><a href="#INTRODUCTION">INTRODUCTION</a></li>
+  <li><a href="#Web::Simple::Application-run_test_request">Web::Simple::Application-&gt;run_test_request</a>
+    <ul>
+      <li><a href="#What-other-things-could-you-do-with-this">What other things could you do with this?</a></li>
+    </ul>
+  </li>
+  <li><a href="#Summary">Summary</a></li>
+  <li><a href="#For-More-Information">For More Information</a></li>
+  <li><a href="#Author">Author</a></li>
+</ul>
+
+<h1 id="TITLE">TITLE</h1>
+
+<p>An Example Catalyst Plugin - Catalyst::Plugin::RunRequest</p>
+
+<h1 id="OVERVIEW">OVERVIEW</h1>
+
+<p>Port <a>Web::Simple</a>&#39;s feature <code>run_test_request</code> to a <a>Catalyst</a> plugin.</p>
+
+<h1 id="INTRODUCTION">INTRODUCTION</h1>
+
+<p>Generally I tell people there are few good reasons to write a <a>Catalyst::Plugin</a>. As a unit of reusability, its a pretty heavy hammer, since a plugin become part of your application and context, that means its available everywhere all the time and of course it also means that your $c and $app are a little bigger memory wise and you incur any startup penalties for every single request. With so many ways to wrap and reuse functionality (as a Model, ControllerRole or ActionRole, for example) there&#39;s nearly never a good reason to write a Plugin. And now that <a>Catalyst</a> is <a>PSGI</a> native, I usually say anything related to the global request or response is probably better off written as <a>Plack::Middleware</a>.</p>
+
+<p>However, if you are looking for something that is global, and is related to application functionality, a plugin is still a rational option. Here&#39;s an example plugin I did that mimics some functionality from another Perl web framework, <a>Web::Simple</a></p>
+
+<h1 id="Web::Simple::Application-run_test_request">Web::Simple::Application-&gt;run_test_request</h1>
+
+<p><a>Web::Simple</a> has a neat feature that makes it easy to run sample request in a test case or via the command line. We&#39;ll leave the CLI for now (its a bit trickier based on the way <a>Catalyst</a> does setup) but as it turn out, mimicing the underlying function is very easy to do. It would make a rational plugin and its also a good opportunity to review some of Catalyst&#39;s PSGI guts.</p>
+
+<h2 id="What-other-things-could-you-do-with-this">What other things could you do with this?</h2>
+
+<p>I&#39;ve never loved the way <a>Catalyst::Plugin::SubRequest</a> worked. It would be very easy to rewrite or offer another approach using this.</p>
+
+<h1 id="Summary">Summary</h1>
+
+<p>TBD</p>
+
+<h1 id="For-More-Information">For More Information</h1>
+
+<p><a>Catalyst</a></p>
+
+<h1 id="Author">Author</h1>
+
+<p>John Napiorkowski <a href="email:jjnapiork@cpan.org">email:jjnapiork@cpan.org</a></p>
+
+
+</body>
+
+</html>
+
+
