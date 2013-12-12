@@ -1,0 +1,11 @@
+<h1>Catalyst SolrDemo</h1>
+<h2>Docs in this query [% docs.list.size %]</h2>
+<h3>Field [% field %] value [%value %]</h3>
+<table>
+[% FOREACH doc IN docs %]
+<tr><th>descriptor</th><th>field value</th></tr>
+[% FOREACH fieldname IN doc.field_names.sort %]
+<tr><td>[% fieldname %]</td><td>[% doc.value_for( fieldname ) %]</td></tr>
+[% END %]
+[% END %]
+</table>

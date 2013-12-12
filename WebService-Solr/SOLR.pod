@@ -1,0 +1,472 @@
+=head1 TITLE
+
+Using SOLR in a Catalyst Model with WebService::Solr
+
+=head1 OVERVIEW
+
+Using L<Solr|http://lucene.apache.org/solr/>, a Search Server from L<Apache's Lucene Project|http://lucene.apache.org> as a B<Catalyst Model>.
+
+=head1 INTRODUCTION
+
+Compared to conventional database search (and the full text query extensions found in most modern SQL implementations), a Search Server is going to provide better performance and search features. Since Solr is writeable as well as readable it can be used as a NoSQL datastore. 
+
+=head2 Solr Basics
+
+Solr is a java servlet, implementing a web based interface to Lucene. Requests to Solr are made via HTTP requests. Request data may be sent in either POST or GET values. Data is returned in JSON but Solr will also return data in xml or CSV formats. Similarly POSTs of data to Solr may be in any of these formats. Lucene provides indexing and search technology, as well as spellchecking, hit highlighting and advanced analysis/tokenization capabilities. The Data Import Handler will allow you to import from lots of other sources rather than needing to POST it all through web requests. Once up and going it gives you a lot of possibilities for finding documents. 
+
+Solr runs in a java servelet answering HTTP protocol requests on a designated port, 8983 by default. Operations are carried out by Get requests and by Post requests of either XML or JSON. Data returned is also in JSON or XML format. CSV and a few other formats are also supported for data. Large data sets are usually imported through the Data Import Handler (DIH) which can among other methods load a CSV file or query a SQL database. The Server and the Collections (equivalent of a database) are configured through XML files. Solr does not include a crawling capability. The L<Nutch|http://nutch.apache.org/> utility or custom scripts are used in conjunction with Solr for crawling.
+
+Requests to Solr can be made through a web browser or any utility such as wget, curl or LWP scripts that implements the HTTP protocol. Each request is independent of all others, there is no session or handshake, Solr recieves a request via HTTP and responds to it. The Solr Server also provides a web interface, anyone who can access the interface, can access all of its features. This has obvious architectural implications in securing solr, because security must be implemented at either the network level or by placing Solr behind another webserver which implements security. Normally Solr is not directly exposed to the public internet.
+
+=head2 Perl Modules for Solr
+
+There are a number of Perl Modules available for Solr, the two that appear the most viable are Apache::Solr and WebService::Solr. Unfortunately, all of the modules have problems both in bugs and unimplemented features. Initally I had the best luck with Apache::Solr but ran into some limitations there. After reading through the source code for several of the modules, I decided to work with WebService::Solr. At present it looks like Apache::Solr is being more actively developed so in the future it could become the better choice. 
+
+A lot of Perl's Solr users prefer to implement their own Agent/Model. Since the Solr interface is based on HTTP requests, JSON and XML, this is not hard so much as potentially time-consuming. 
+
+=head1 Preparing the Environment
+
+You will need to have a Catalyst Development Environment ready, in addition you should install WebService::Solr and Catalyst::Model::WebService::Solr. Day One of this Advent Calendar discussed the enhancements in 5.90050, for our purposes the improved UTF8 handling is a Critical Feature and resolves a showstopper bug. When I first looked at WebService::Solr "Wide Character on Print" really stymied my first sessions. If updating Catalyst isn't an option for you the workaround I was using is detailed in rtcpan bug 89288. 
+
+You will also need to install a JVM like open JDK and then download a copy of Solr from the L<Solr Download Page|http://lucene.apache.org/solr/downloads.html>.  Once downloaded and extracted you will need to load the example data. Open up two terminals. To save space I'll refer you to the L<Solr tutorial|http://lucene.apache.org/solr/tutorial.html>, to speed up use post.sh in the exampledocs folder to populate the test data, and skip ahead to querying to confirm that you have loaded the 32 documents. For the purpose of the rest of the article it will be assumed you have Solr running locally with the test data loaded and answering the default port 8983.
+
+ Terminal 1
+ cd ..path_to../example
+ java -jar start.jar
+ 
+ Terminal 2
+ cd ..path_to../example/exampledocs
+ ./post.sh *.xml
+
+=head1 Create A Project with a Template Toolkit View
+
+ catalyst.pl SolrDemo
+ cd SolrDemo
+ ./script/solrdemo_create.pl view HTML TT
+
+Edit SolrDemo.conf
+
+ solrserver         http://localhost:8983/solr/collection1
+
+Edit the config section of lib/SolrDemo.pm and add B<encoding =E<gt> 'utf8',> to prevent wide character errors.
+
+ __PACKAGE__->config(
+    name => 'SolrDemo',
+    # Disable deprecated behavior needed by old applications
+    disable_component_resolution_regex_fallback => 1,
+    enable_catalyst_header => 1, # Send X-Catalyst header    
+    encoding => 'utf8', # prevents wide character explosions
+    'View::HTML' => {  #Set the location for TT files        
+         INCLUDE_PATH => [ SolrDemo->path_to( 'root' ), ], },    
+ );
+
+Create some additional files we'll need
+
+ touch lib/SolrDemo/Model/Solr.pm
+ touch lib/SolrDemo/Model/SolrModelSolr.pm
+ touch lib/SolrDemo/Controller/Thin.pm
+ touch lib/SolrDemo/Controller/Thin.pm 
+ touch root/results.tt
+ touch t/model_solr.t
+
+In addition I recommend creating a reset script in the example/exampledocs folder of the Solr distribution. This script will delete your collection and replace it with the sample docs when you are testing CRUD operations. 
+
+ wget "http://localhost:8983/solr/update?stream.body=<delete><query>*:*</query></delete>" -O /dev/null
+ wget "http://localhost:8983/solr/update?stream.body=<commit/>" -O /dev/null 
+ ./post.sh *.xml
+
+=head1 A Thin Model with Catalyst::Model::WebService::Solr
+
+There are only two options to configure, where to connect and autocommit. By default Solr may not immediately reflect changes to data, and the autocommit flag tells WebService::Solr to always follow delete/add operations with a commit request. You might want to turn it off if you were writing batches of data and wanted to commit at the end of the batch for performance purposes.
+
+File: lib/SolrDemo/Model/SolrModelSolr
+
+    package SolrDemo::Model::SolrModelSolr;
+    use namespace::autoclean;
+    use Catalyst::Model::WebService::Solr;
+    use Moose;
+
+    extends 'Catalyst::Model::WebService::Solr';
+    __PACKAGE__->config(
+        server  => SolrDemo->config->{solrserver},
+        options => { autocommit => 1, }
+    );
+    1;
+
+File: lib/SolrDemo/Controller/Thin.pm 
+
+    package SolrDemo::Controller::Thin;
+    use namespace::autoclean;
+    use WebService::Solr::Query;
+    use Moose;
+
+    BEGIN { extends 'Catalyst::Controller' }
+
+    sub response2info {
+        my $response = shift;
+        my $raw      = $response->raw_response();
+        my $pre      = '';
+        $pre .= "\n_msg\n" . $raw->{'_msg'};
+        $pre .= "\n_headers";
+        my %hheaders = %{ $raw->{'_headers'} };
+        for ( keys %hheaders ) { $pre .= "\n    $_ = $hheaders{$_}"; }
+        $pre .= "\n_request";
+        my %rreq = %{ $raw->{'_request'} };
+        for ( keys %rreq ) { $pre .= "\n    $_ = $rreq{$_}"; }
+        $pre .= "\n_content</pre>\n" . $raw->{'_content'} . '<pre>';
+        $pre .= "\n_rc\n" . $raw->{'_rc'};
+        $pre .= "\n_protocol\n" . $raw->{'_protocol'};
+        $pre .= "\nRequest Status (via method)\n" . $response->solr_status();
+        my @docs = $response->docs;
+        $pre .= "\nDocument Count: " . scalar(@docs);
+        return $pre;
+    }
+
+    sub dump : Local : Args(0) {
+        my ( $self, $c ) = @_;
+        my $response =
+        $c->model('SolrModelSolr')
+        ->search( WebService::Solr::Query->new( { '*' => \'*' } ),
+            { rows => 10000 } );
+        my @docs = $response->docs;
+        $c->log->info( "\nDocument Count: " . scalar(@docs) );
+        my $pre = &response2info($response);
+        $c->response->body("<pre>$pre </pre>");
+    }
+
+    sub example : Local : Args(0) {
+        my ( $self, $c ) = @_;
+        my $response =
+        $c->model('SolrModelSolr')
+        ->search( WebService::Solr::Query->new( { text => ['hard drive'] } ),
+            { rows => 10000 } );
+        my $pre = &response2info($response);
+        $c->response->body("<pre>$pre </pre>");
+    }
+
+    __PACKAGE__->meta->make_immutable;
+
+    1;
+
+=head2 About the thin controller
+
+=head3 response2info
+
+This is Viewish code shared by two of the methods that puts the raw elements of the response into a string. 
+
+=head3 dump
+
+Executes a query for all records in the Solr database. WebService::Solr::Query generates queries. To generate the query you need to pass a hashref of the Solr fields you want and the values for the fields, the \ indicates to pass the second * as a literal string. The second argument is a hashref of options, here we want to override the Solr default of returning 10 rows by specifying an arbitrary high value.
+
+=head3 example
+
+This example query is hard coded to find items matching the phrase 'hard drive', which, we see from the spew, gets translated as 'hard+drive'. Here we specified the field text (which is a catch-all field defined to hold everything searchable) and passed an array ref to the list of values. If you copy and rename the method and then change the field list to B<['hard drive','maxtor']>, you will find that you still get the same 2 records, this is because of solr's matching behaviour. If you want to filter for only maxtor hard drives you'll need to use a filter query (fq) which is specified in the options.
+
+Add the following method to Thin.pm
+
+    sub maxtor :Local :Args(0) {
+        my ( $self, $c ) = @_;
+        my $maxq = WebService::Solr::Query->new( { manu => ['maxtor'] } );
+        my $response =
+        $c->model('SolrModelSolr')
+        ->search( WebService::Solr::Query->new( { text => ['hard drive'] } ),
+            { rows => 10000, fq => $maxq } );
+        my $pre = &response2info($response);
+        $c->response->body("<pre>$pre </pre>");
+    } 
+
+=head3 a real search
+
+Add this method to: Thin.pm
+
+    sub select : Local : Args(2) {
+        my ( $self, $c, $fieldname, $fieldvalue ) = @_;
+        my $response =
+        $c->model('SolrModelSolr')
+        ->search( WebService::Solr::Query->new( { $fieldname => [$fieldvalue] } ),
+            { rows => 10000 } );
+        my @docs = $response->docs;
+        $c->stash(
+            template  => 'results.tt',
+            field     => $fieldname,
+            value     => $fieldvalue,
+            docs      => \@docs,
+        );
+    }
+
+File: /root/results.tt    
+
+    <h1>Catalyst SolrDemo</h1>
+    <h2>Docs in this query [% docs.list.size %]</h2>
+    <h3>Field [% field %] value [%value %]</h3>
+    <table>
+    [% FOREACH doc IN docs %]
+    <tr><th>descriptor</th><th>field value</th></tr>
+    [% FOREACH fieldname IN doc.field_names.sort %]
+    <tr><td>[% fieldname %]</td><td>[% doc.value_for( fieldname ) %]</td></tr>
+    [% END %]
+    [% END %]
+    </table>
+
+Try some queries: 
+
+=over
+
+=item *
+http://localhost:3000/thin/select/text/ipod  
+
+=item *
+http://localhost:3000/thin/select/features/cache 
+
+=item *
+http://localhost:3000/thin/select/manu/maxtor
+
+=back
+
+First the model returns a WebService::Solr::Response object, we use the docs method to extract an array of WebService::Solr::Document objects from it which are then passed by reference to the view. The view iterates the array and uses the B<fieldnames> method to get a list of the fields in that document (not all documents in the test data have the same fields) and then iterates through it, retrieving the individual fields with the B<value_for method>.
+
+=head1 Moving to a Fat Model
+
+My Solr search queries typically require a lot of supporting code, which is easier to test in a model than a controller, and is generally more appropriate to the model. Unlike DBI-based models which maintain a connection, each request to Solr is completely independent of all others and no connection is maintained between them, so instantiating a new WebService::Solr object is relatively trivial, additionally if you work with multiple collections you need to create a seperate object for each one. 
+
+lib/SolrDemo/Model/Solr.pm
+
+    package SolrDemo::Model::Solr;
+
+    use WebService::Solr;
+    use WebService::Solr::Query;
+    use WebService::Solr::Field ;
+    use WebService::Solr::Document ;
+    use namespace::autoclean;
+
+    use parent 'Catalyst::Model';
+
+    our $SOLR = WebService::Solr->new( SolrDemo->config->{solrserver} );
+
+    sub _GeoFilter {
+        my ( $location, $sfield, $distance ) = @_;
+        return qq/\{!geofilt pt=$location sfield=$sfield d=$distance\}/;
+    }
+
+    sub List {
+        my $self      = shift;
+        my $params    = shift;
+        my $mainquery = WebService::Solr::Query->new($params);
+        my %options   = ( rows => 100 );
+        my $response  = $SOLR->search( $mainquery, \%options );
+        return $response->docs;
+    }
+
+    sub Kimmel {
+        my $self         = shift;
+        my $distance     = shift;
+        my $kimmelcenter = '39.95,-75.16';
+        my $mainquery    = WebService::Solr::Query->new( { '*' => \'*' } );
+        my $geofilt      = &_GeoFilter( $kimmelcenter, 'store', $distance );
+        my %options      = ( rows => 100, fq => $geofilt, sort => 'price asc' );
+        my $response     = $SOLR->search( $mainquery, \%options );
+        return $response->docs;
+    }
+
+    1;
+
+t/model_solr.t
+
+    use Test::More;
+    BEGIN { use_ok 'SolrDemo' }
+
+    my $C = SolrDemo->new ;
+    my @docs = $C->model('Solr')->List( { cat => 'electronics', manu => 'corsair' } );
+    is( scalar(@docs), 2, 'We expect 2 docs' );
+
+    my $carnegiehall = '40.76,-73.98' ;
+    my $geofilt = &SolrDemo::Model::Solr::_GeoFilter( $carnegiehall, 'store', 400 ) ;
+    is( $geofilt, '{!geofilt pt=40.76,-73.98 sfield=store d=400}', 
+        'Test geofilter construction using carnegie hall as a testcase');
+    my @docs2 = $C->model('Solr')->Kimmel( 1600 ) ;
+    is( scalar(@docs2), 3, 'There are 3 items within 1600 km of the Kimmel Center' );
+
+    done_testing();
+
+lib/SolrDemo/Controller/Fat.pm
+
+    package SolrDemo::Controller::Fat;
+    use namespace::autoclean;
+    use Moose;
+
+    BEGIN { extends 'Catalyst::Controller' }
+
+    sub select : Local : Args(2) {
+        my ( $self, $c, $fieldname, $fieldvalue ) = @_;
+        my @docs = $c->model('Solr')->List( { $fieldname => $fieldvalue } );
+        $c->stash(
+            template => 'results.tt',
+            field    => $fieldname,
+            value    => $fieldvalue,
+            docs     => \@docs,
+        );
+    }
+
+    sub nearkimmel : Local : Args() {
+        my ( $self, $c ) = @_;
+        my $distance = 500;
+        my @docs     = $c->model('Solr')->Kimmel(500);
+        $c->stash(
+            template => 'results.tt',
+            field    => 'Distance from Kimmel Center in Philadelphia',
+            value    => $distance,
+            docs     => \@docs,
+        );
+    }
+
+    __PACKAGE__->meta->make_immutable;
+
+    1;
+
+The Model contains 3 methods. The private method generates a geofilter string, because that isn't currently implemented in WebService::Solr, but I've proposed it for a future release. Of the other two methods the first replicates the select we used in the thin model and the third finds things near the Kimmel Center in Philadelphia as an example of geospatial search. 
+
+A couple of times now we've seen B<WebService::Solr::Query-E<gt>new( { '*' =E<gt> \'*' } )>. If you go back to the first dump methods you can see it ended up as B<(*%3A*)>, B<%3A> translates back to 'B<:>'. You could use the string B<'(*:*)'> instead of generating the value with Query. Modify the Kimmel method to demonstrate this yourself. In this special case we wanted to preseve the value '*' as a literal, not risk having it converted to B<%2A>, which we accomplished by passing it as a reference. For this case it might be clearer to just use the string directly in your query, but generally I'd rather use WebService::Solr::Query and have it worry about the details of Solr Grammar. WebService::Solr::Query is capable of generating complex queries with numerous options beyond the scope of this introduction. 
+
+I also added in the %options of the Kimmel method a third option, sort. The sort option takes two arguments, a field_name and either 'asc' or 'desc'. 
+
+You should now be able to run the tests, and if they work when you run the test server, /fat/select/?/? will work as it did in the thin model, and /fat/nearkimmel will show you results of a geospatial filter.
+
+=head2 Adding, Updating, and Deleting
+
+We're now going to add a record, modify it, and then delete it. This is all going to be done in tests. 
+
+Two methods get added to the model, Delete and Add (which is also the update method). Both methods normally return a value of B<1>, which is the value normally returned by the underlying WebService::Solr method, which in turn is determined by Solr's response, which is not necessarily an indicator that what you intended to happen is what happened. 
+
+=head2 Add
+
+Add and Update are the same method. When a document is added with the same id as an existing document, Solr replaces the original record with the new one. This means whenever we update a record we need to send the entire new version. 
+
+The Add method takes a hashref of fieldnames and values which it uses to create a WebService::Solr::Document. There is an optional parameter to the WebService::Solr->add method for setting boost values on fields, this is not implemented in our Model. A WebService::Solr::Document can be created in 3 ways, first it can be returned by a query to Solr, second it can be constructed from arrays of WebService::Solr::Field objects, and finally we can pass an array of array references to the constructructor.  
+
+Here is an example of a data structure to create a WebService::Solr::Document. 
+
+ my @fields = (
+    [ id     => 'B0019032-02'                     { boost => 1.6 } ],
+    [ artist => 'Philadelphia Orchestra',       { boost => '7.1' } ],
+    [ format => 'CD Audio'                                         ],
+    [ title  => 'Yannick Conducts Stravinsky: The Rite of Spring'  ],
+ );
+
+=head2 Delete
+
+Delete takes a hashref that is used to construct a query. If we use { id => $VALUE } we will delete one record. A careless query could delete a lot of records, as the last test shows { cat => 'electronics' } will delete half of our records! After you run the last test you will need to reset your data using the script you created earlier for that purpose. The sprintf statement is in the method because when the output of WebService::Solr::Query is fed to the delete method the delete method may recieve it is an object rather than a string.
+
+Add to Solr.pm Model
+
+    sub Add {
+        my $self      = shift;
+        my $params    = shift;
+        my @fields_array = () ;
+        foreach my $k ( keys %{$params} ) { 
+                my @fields = ( $k, $params->{ $k } );
+                push @fields_array, ( \@fields ) ;
+            }
+        my $doc = WebService::Solr::Document->new( @fields_array ) || die "cant newdoc $!";
+        my $result = $SOLR->add( $doc ) ;
+        return $result ;
+    }
+
+    sub Delete {
+        my $self      = shift;
+        my $params    = shift;
+        # If the query isn't forcibly stringified an exception may be thrown.
+        my $result = $SOLR->delete_by_query( 
+            sprintf( "%s", WebService::Solr::Query->new($params) ) ) ;
+        return $result ;
+    }
+
+Add to t/model_solr.t immediately above done_testing
+
+    note( "\n* CRUD Tests *\n" );
+    my $added1 = $C->model('Solr')->Add(
+        {
+            name     => 'Zune Player',
+            manu     => 'Microsoft',
+            features => 'Truly Obsolete',
+            price    => '300',
+            store    => '40.76,-73.98',
+            cat      => 'electronics',
+            id       => 'MSZUNE'
+        }
+    );
+    is( $added1, 1,
+        'successfully added a zune located at Carnegie Hall to inventory' );
+
+    my @docs3 = $C->model('Solr')->Kimmel(1600);
+
+    is( scalar(@docs3), 4,
+        'There are now 4 items within 1600 km of the Kimmel Center' );
+
+    # a subroutine to list a doc.
+    sub listdoc {
+        my $d      = shift;
+        my $string = '';
+        $string .=
+            ' ID: '
+        . $d->value_for('id') . ' -- '
+        . $d->value_for('name')
+        . ' Manu: '
+        . $d->value_for('manu') . "\n\t"
+        . $d->value_for('features');
+        return $string;
+    }
+
+    note( '* Display the 4 items within 1600km showing added record *');
+    for (@docs3) { note( &listdoc($_) ) }
+
+    my $updated1 = $C->model('Solr')->Add(
+        {
+            name     => 'Zune Player',
+            manu     => 'Microsoft',
+            features => 'Half price Closeout Sale on our last MS ZUNE! Save $150',
+            price    => '150',
+            store    => '40.76,-73.98',
+            cat      => 'electronics',
+            id       => 'MSZUNE'
+        }
+    );
+
+    is( $updated1, 1, 'Updated the Zune for Closeout!' );
+
+    my @zunedocs = $C->model('Solr')->List( { id => 'MSZUNE' } );
+    my $zunedoc = $zunedocs[0];
+    is( $zunedoc->value_for('price'), 150, 'Prove that zune now costs $150' );
+
+    note( '* Display the Documents showing modified record for ZUNE. *');
+    @docs3 = $C->model('Solr')->Kimmel(1600);
+    for (@docs3) { note( &listdoc($_) ) }
+
+    my $delete1 = $C->model('Solr')->Delete( { id => 'MSZUNE' } );
+    is( $delete1, 1, 'delete returned success' );
+    @zunedocs = $C->model('Solr')->List( { id => 'MSZUNE' } );
+    is( scalar( @zunedocs ) , 0, 'Confirm it is deleted' );
+
+    # This test deletes data, after running it you must reset your data
+    # Comment it or skip it to avoid.
+    my @before = $C->model('Solr')->List( { '*' => \'*' } );
+    my $delete2 = $C->model('Solr')->Delete( { cat => 'electronics' } );
+    my @after = $C->model('Solr')->List( { '*' => \'*' } );
+    is( scalar(@after) , 18, "There were 32 documents, there are now 18");
+
+=head1 For More Information
+
+After following this how-to document you'll want to read the WebService::Solr Documentation. It is organized by sub-module so you'll have to read all of the pieces, plus the tests from the distribution which are where you'll find code examples. You'll also want to read the Solr Documentation, there is a lot more on the web about it than the module.
+
+If there are any errata to this article they will be posted on my L<technical blog|http://techinfo.brainbuz.org/?p=368>. You can download the entire contents and source for this article as well L<http://www.brainbuz.org/images/solrcattut.tgz>.
+
+=head1 Summary
+
+In this article we created both Thin and Fat Models for WebService::Solr. For the Fat Model we also Created, Updated, and Destroyed data, and wrote tests for everything we did.
+
+=head1 Author
+
+John Karr <brainbuz@brainbuz.org> brainbuz
+
+Thanks to Andy Lester for taking time to review this article and make a few helpful recommendations.
+
+=cut
