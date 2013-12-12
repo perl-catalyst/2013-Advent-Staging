@@ -1,0 +1,177 @@
+=encoding utf8
+
+
+=head1 Spoilerific: a (semi-)practical example project with Catalyst
+
+This article introduces I<Spoilerific>, a simple but complete Catalyst-based web application I built to fill a specific (if somewhat frivolous) need in early 2013. I continue to host a live instance of it on my own webserver.
+
+When Perl Advent season came around, the topic arose on Catalyst's IRC channel that the framework could benefit from some more real-world example projects. It happened that I had already shared Spoilerific's source on GitHub, but hadn't really written much about it yet. This article, then, offers a brief tour through the codebase, and a short description of the process I used to build and deploy the project.
+
+
+=head1 What is Spoilerific?
+
+In the spring of 2013 I released L<Spoilerific|http://spoilerific.jmac.org>, a website that helps Twitter users discuss stuff they like in public without spoiling details for their friends. You can L<read the full apologia on the site's "about" page|http://spoilerific.jmac.org/about>, but the idea in essence involves my desire to take the trivial, two-way L<ROT13 encryption scheme|http://en.wikipedia.org/wiki/Rot13>, once ubiquitous in bygone Usenet conversations about books and movies, and reintroduce it to a modern social network.
+
+If you, say, want to tweet "I can't believe the butler did it!" about the latest I<Downton Abbey>, Spoilerific makes it easy to create a Twitter post reading "I can't believe I<gur ohgyre qvq vg!> #downtonabbey", ending with a URL that allows your friends to decipher what you've written -- after clicking past a I<spoilers ahead!> warning screen. Said friends can then use the resulting webpage to add their own thoughts, which will in turn post to Twitter, once again safely veiled by ROT13 and offering a linkback for the curious.
+
+I would describe Spoilerific's success as let's-say-I<modest>. As a strictly-for-fun project, it didn't really drive me to launch a marketing campaign larger than saying "hey y'all lookit" on L<my own Twitter feed|https://twitter.com/JmacDotOrg> and an IRC channel or two. It got L<a curious little writeup in Kill Screen|http://killscreendaily.com/articles/news/spoilerific-draft/>, and enough people made use of it that L<I can link to live examples of its use|https://twitter.com/search?q=spoilerific.jmac.org%2Fthread> without feeling embarrassed (as I figure folks probably don't peer too hard at the resulting tweets' timestamps). Beyond that, it succeeds in its primary goal of scratching my own itch for a tool allowing to me tweet sensitive plot points guilt-free, and in the end that's all I set out to make.
+
+More saliently to readers of a Catalyst blog, I later in the year decided to L<share the thing on GitHub|https://github.com/jmacdotorg/Spoilerific>, as part of a recent personal effort to play a more active role in open source by making the ol' graph a little greener. Now that it's Advent season, I thought I'd offer a bit of an annotated tour through the Spoilerific codebase. I certainly don't hold the project up as the epitome of tight coding practices, but I did my best to stay mindful of the modern Catalyst fat-logic, thin-controller philosophy while I built it, and learned a lot.
+
+It was fun to make, and I hope its guts serve as a tidy example of a small and focused example of how to build an interesting web application with Catalyst.
+
+
+=head2 Why Catalyst?
+
+The simplest answer as to why I chose Catalyst is the least interesting one: it's what I know! I've been using Catalyst both in L<my consulting day-job|http://appleseed-sc.com> and with hobby projects for several years.
+
+However, a small and well-defined hobby project like Spoilerific can be a perfect opportunity to explore new software-creation tools and techniques. Catalyst's feisty younger cousins L<Dancer|https://metacpan.org/pod/Dancer> and L<Mojolicious|https://metacpan.org/pod/Mojolicious> called to me to try them, learning their ways by building a simple but non-trivial project like this. 
+
+Someday, I will answer those calls! But in this case, I also happened that I remained mere months into teaching myself L<Moose|https://metacpan.org/pod/Moose>, with only a single significant Moose-driven project under my belt -- and not even one that used a database. (Yes, I was already an accidental Moose user by dint of our ungulate friend powering Catalyst's core, but that's a world apart from boldly writing C<use Moose;> and then knowing what to do with it.) Spoilerific clearly wanted to run on a classic LAMP stack, a trough to which I had yet to truly lead a Moose of my own. 
+
+I figured that would provide enough novelty for one project, so I stuck with Catalyst's familiar patterns, pledging to make the application's model code as Moosely as I could. Some major Moose features don't appear here -- I wouldn't grok roles, for one, until my next major project -- but I did end up pleased with my experimental use of lazily built object attributes, method modifiers, and other antler-bearing features.
+
+
+=head1 How I built Spoilerific
+
+This is the pattern I have fallen into when starting a new Catalyst-driven LAMP-stack project:
+
+=over
+
+=item 1.
+
+Use Catalyst's helper scripts to set up the app's workspace
+
+
+=item 2.
+
+Create the first draft of a database
+
+
+=item 3.
+
+Create the first draft of the data model, using Catalyst helper scripts again
+
+
+=item 4.
+
+Develop a complete draft of the project's business logic, rebuilding the database-based model modules as needed, but otherwise not thinking about Catalyst much
+
+
+=item 5.
+
+Build the application's controllers and templates, iterating further on the model as needed
+
+
+=item 6.
+
+Iterate and test until you can't stand it anymore and want to throw the whole project into a ditch. I<Ready for release!>
+
+
+=back
+
+
+=head2 Set up the app's skeleton
+
+B<Use C<catalyst.pl> to throw down an app-skeleton with an appropriate name.> In this case, I C<cd>ed over to a directory without too many loose objects lying around and typed C<catalyst.pl Spoilerific>. I always enjoy the few fleeting seconds of watching that script cut a broad new sheet of glittering blank code-canvas, pregnant with potential Perl.
+
+But before laying down code, I had to design the object model.
+
+
+=head2 Draft the database
+
+I have been working with MySQL for as long as I've known Perl. I just can't say no to it when it comes to whipping up a real database quickly.
+
+While aware of L<a growing dissent|http://grimoire.ca/mysql/choose-something-else> in the larger programming world regarding MySQL versus other, variously potent DB solutions, I would like to point out that L<Sequel Pro|http://www.sequelpro.com> not only makes editing MySQL on Mac OS X a delight, but its icon may be the most inspired thing to have ever graced my dock. I voice neither doubt nor shame that L<that buttery stack|http://www.sequelpro.com/blog/2013.01/hello-this-is-sequel-pro-1-0/> has all by itself extended MySQL's lifetime as a part of my programming workflow by several years.
+
+So, yeah, B<Spoilerific uses MySQL.>
+
+
+=head2 Wave magic wand to create the model; then wave it some more
+
+B<Implement the database, then use it to mold a corresponding Catalyst model via the (in this case) C<spoilerific_create.pl> script, which C<catalyst.pl> puts into the application's C<scripts> directory.> I'll freely admit that I see the command that performs this as an opaque incantation; I copy and paste it from a textfile I keep of such things, editing any obvious project-specific substrings to fit. For Spoilerific, I invoke the script like this, while standing in the app's directory:
+
+    script/spoilerific_create.pl model SpoilerificDB DBIC::Schema Spoilerific::Schema create=static dbi:mysql:dbname=spoilerific root
+
+Loosely, that scree of arguments says "Create a new Catalyst model class that hooks into a local MySQL database named C<spoilerific>, and use L<DBIx::Class::Schema::Loader|https://metacpan.org/pod/DBIx::Class::Schema::Loader> to generate (or update) a bunch of appropriate L<DBIx::Class|https://metacpan.org/pod/DBIx::Class> files for the tables you find there." However, I cast this particular spell so often, and without any need for further modification, that it feels rather a blur of Enochian sigils whose deeper workings I need not think terribly hard about. 
+
+I allow myself this cheerfully ignorant attitude towards this particular command because the output befits true sorcery: a full set of documented DBIx::Class modules, one per table, with their core column definitions and relationships all set up according to the columns and foreign-key relationships found in the database itself. Even better, once you begin adding your project's custom model code to these basic class definitions, you can re-run that same C<create.pl> invocation every time you make any iterative changes to your database. So long as you didn't change any of the pre-generated code (all located above a checksum comment warning you about it), DBIx::Class::Schema::Loader will safely update your database model classes to reflect the changes.
+
+I run this command many, many times over the development cycle of a typical Catalyst LAMP project. It's cool.
+
+
+=head2 Develop the model (and only the model)
+
+B<Proceed to ignore all the Catalyst-specific stuff for a while, focusing only on buidling the model classes.> I I<certainly> didn't work this way when new to Catalyst, instead diving right into controllers and templates, building the website from the outside in. But with Spoilerific, I took the opportunity to practice the more contemporary Catalyst philosophy of restricting the role of controllers and views as mere manipulators of the model, keeping logical code out of controllers as much as possible
+
+To that end, Spoilerific has three main model classes. Each of them maps to an SQL table, and therefore each is a class originally created by that crazy C<create.pl> incantation; I merely extended each one, tucking all their custom code safely underneath their checksum lines, allowing me to re-run the DBIx::Class::Schema::Loader spell whenever I wanted to reflect SQL table definitions in the code.
+
+You can find these classes in the C<lib/Spoilerific/Schema/Result> directory within the Spoilerific source tree:
+
+B<User.pm>, unsurprisingly, defines a user of the system. It contains only a little custom code, just enough to transform an inert DB object describing a user into a live Twitter connection specific to that user. Namely, this is its C<twitter_ua> object attribute -- "ua" standing for I<user agent>, here -- which holds a L<Net::Twitter|https://metacpan.org/pod/Net::Twitter> object. 
+
+You can see this attribute has its Moose C<lazy> bit bit set, so it instantiates itself only when it needs to, and once it does it sticks around for the lifetime of this object. This is one of the L<Moose best practices|https://metacpan.org/pod/Moose::Manual::BestPractices> I tried mindfully to stick to while building Spoilerific.
+
+When it does build itself, the attribute calls on database-defined attributes like C<twitter_access_token>, which Spoilerific defines in adherence to L<Catalyst::Authentication::Credential::Twitter|https://metacpan.org/pod/Catalyst::Authentication::Credential::Twitter>. The values for these fields become magically populated through this module when the website user logs into Spoilerific via Twitter's OAuth. Spoilerific::Controller::Auth defines a bit of connective tissue, but that credential module provides most of the heavy lifting.
+
+B<Thread.pm> defines a collection of Spoilerific posts on a single, named topic, with an associated Twitter hashtag. While a key concept to the user experience -- threads being what you browse, when you visit any Spoilerific discussion -- the concept is so simple that I didn't initially need to write a single bit of code outside of what DBIx::Class::Schema::Loader automatically provides, based only on the C<thread> table structure.
+
+I did end up tossing in one addition, an C<around> modifier to the C<hashtag> accessor method. It simply helps normalize the data stored in this column, prepending an octothorpe to the provided tag if the user didn't do so themselves.
+
+B<Post.pm> contains most of the project's business logic. Some interesting features include:
+
+=over
+
+=item *
+
+C<url_length>, a class attribute that asks Twitter itself how much space out of a tweet's precious 140 characters to budget for each C<t.co>-shortened URL. Lazy building at the class level means that Spoilerific will ask Twitter about this when it needs to, and then retain the value for the rest of its life as a system process; Twitter doesn't adjust this value very often.
+
+
+
+=item *
+
+An C<around body_plaintext> method modifier, which reacts to any change to the post's text by generating the ROT13-enciphered text, then calling the internal C<_fill> method to decorate the text with additional hashtag as space allows. It updates the post object's various stored permutations of the plain, user-supplied tweet text before returning control back to the accessor. 
+
+
+
+=item *
+
+A C<post_to_twitter> method, which does what you'd expect, via the Net::Twitter handle attached to the current user object.
+
+
+
+=back
+
+I shall leave further exploration of Spoilerific's business logic, including its tests in the project's C<t/> directory and and the little bit of extra ResultSet class magic I added, as an exercise for the reader. The point I wish to illustrate here is that, though Spoilerific is "a Catalyst application", I put most of my early thought and work into code that manipulates database-stored objects based on a combination of user input and messages from Twitter, and which has no intrinsic concept at all of being a web application per se. I find Catalyst's helper scripts invaluable for getting this process started quickly and keeping the DBIC-based model modules updated, but I otherwise don't think about Catalyst much until I've completed building the model's first draft.
+
+
+=head2 Create controllers and templates (and everything else)
+
+Spoilerific has only three controller modules, found (as expected) in C<lib/Spoilerific/Controller>. B<Auth.pm> and B<Root.pm> are both rather minimal; the former provides some project-specific interfacing between the application and L<Catalyst::Authnetication::Credential::Twitter|https://metacpan.org/pod/Catalyst::Authnetication::Credential::Twitter>, and the latter sets up a handful of defaults and (mostly-)static informational pages. B<Thread.pm>, on the other hand, contains a couple hundred lines of Catalyst action definitions, all detailing different things a Spoilerific user can do with a given thread object -- create it, add to it, or read it in its encrypted or "spoiled" forms. (And a C<random> action, just for fun, fetches a randomly chosen thread from the database for display.)
+
+Looking at it another way, Spoilerific::Controller::Thread contains I<only> a couple hundred lines of code, much of which is devoted to mundane tracking of the user's current state in the application's flow, or setting up the display of error and success messages. While all the verbs the user can invoke are defined in this module, none have terribly long definitions, as the more logically complex work of processing text and working with Twitter is all handled elsewhere. For the most part, the controller just fetches or manipulates model objects based on which action the web-user wishes to invoke, perhaps sets some values in the stash or session object, and then allows the view to do the rest. 
+
+Even the most painful part of form-handling is handled elsewhere, in Spoilerific::Form::Thread -- which, you'll note, is itself quite short, as it lets its grandparent class, the excellent L<HTML::FormHandler|https://metacpan.org/pod/HTML::FormHandler>, do all the hard work.
+
+In essence, the controller conceptually lies closer to the UI than it does to the business logic, even while functioning explicitly as bond between them. I find Spoilerific::Controller::Thread quite easy to read and follow, even though I haven't touched it for half a year, precisely because it sticks only to defining the web application's actions (and reactions), without itself defining too deeply how any of these actions actually work.
+
+I've little to say about the templates, which comprise unsurprising examples of L<Template::Toolkit|https://metacpan.org/pod/Template::Toolkit> documents. C<root/thread/post_form.tt> is perhaps notable for its use of JavaScript -- including an AJAX call to the Catalyst backend -- in order to make a pleasantly interactive form, able to count characters remaining and offer a preview of what the ROT13-encoded tweet will look like prior to actual posting. 
+
+The one most regretful piece of Spoilerific code lurks in here, too: I ended up recasting the URL-detecting logic I created for Spoilerific::Schema::Result::Post as JavaScript, just so that the characters-remaining counter can rapidly and accurately update itself without having to consult with the backend on every keystroke. (This because Twitter replaces I<every> URL in a tweet with a shortened version of a fixed length.) A bit dirty, but a comprise I decided to make for the sake of a better user experience.
+
+
+=head2 Finishing up
+
+Once all this was laid out, of course, came quite a bit of iterative development of every bit of the app, followed by betatesting from some fine and patient friends. I finally launched the project via FCGI on Apache -- L<one of the standard Catalyst deployment schemes|http://search.cpan.org/~ether/Catalyst-Manual-5.9007/lib/Catalyst/Manual/Deployment/Apache/FastCGI.pod>. It's run since then without any further work from me, except for a bump we hit in midsummer when Twitter changed its API enough to have me spend several hours tracking strange protocol errors down. (An issue, certainly, that I could have staved off earlier had I only paid more attention to Twitter's well-published API machinations.)
+
+Sometime during the final stretch of development I discovered the delightful L<Catalyst::TraitFor::Model::DBIC::Schema::SchemaProxy|https://metacpan.org/pod/Catalyst::TraitFor::Model::DBIC::Schema::SchemaProxy>, which makes easy the passing of configuration information from Catalyst config files through Model modules, down to the underlying (and purposefully Catalyst-ignorant) logic classes. Spoilerific uses this trait to allow storage of Twitter credentials as class attributes on the database schema object, where the project's various other objects can read them as needed. This isn't the only or necessarily the best way to handle logic-class configuration -- I've since been introduced to tools like L<MooseX::SimpleConfig|https://metacpan.org/pod/MooseX::SimpleConfig> -- but in this case I found it does the job quite well.
+
+
+=head1 Unccl unpxvat!
+
+I hope you've found some value in this short tour through a small Catalyst application. I leave you with a reminder that L<I put it on GitHub|https://github.com/jmacdotorg/Spoilerific> in the full spirit of sharing, so whether you'd like to mess around with the code, pull-request an improving patch, or make something entirely of your own by scooping out my Usenet-obsessed nonsense and replacing it with something far more interesting, I heartily invite you to do so.
+
+
+=head1 Author
+
+Jason McIntosh L<jmac@jmac.org|mailto:jmac@jmac.org> (L<@jmacdotorg|http://twitter.com/jmacdotorg> on Twitter, jmac on IRC)
