@@ -68,7 +68,7 @@ you don't need to wait until the process is complete, but instead you can
 register a callback (basically an anonymous subroutine) that gets 
 called when the I/O job is complete.  You can even register callbacks
 to handle exceptional events.  This means that instead of having a limited
-number of forked processes that can handled one connection each, you can
+number of forked processes that can handle one connection each, you can
 have many (limited by how your operating system is setup and what resources it
 has) connections all at once.  The trick here is that instead of doing
 one thing at a time, we have an event loop which manages a schedule of
@@ -106,7 +106,7 @@ Lets rewrite the blocking application to run under an evented server:
 There's a number of popular systems for managing event loops under Perl,
 including L<POE>, L<AnyEvent> and L<IO::Async>.  For this example I choose
 to use L<AnyEvent>.  Let's break down the application and see what (if anything)
-this is buying use.
+this is buying us.
 
 First off, instead of just creating an infinite loop, we create an anonymous
 subroutine to encapsulate the L<AnyEvent> timer model.  If you look carefully
@@ -120,8 +120,8 @@ Then, when the the L<PSGI> application runs and receives a request, it invokes
 the closure with the C<$writer> object.  This then starts a timer event, which
 every second runs the callback to output the time.
 
-So, how is this better than the shorter an more simple version that runs under
-L<Starman>?  This timer is not waiting a second between callback.  It not
+So, how is this better than the shorter and more simple version that runs under
+L<Starman>?  This timer is not waiting a second between callbacks.  It's not
 blocking the server.  As a result, the L<Twiggy> based server can accept many
 more connections than L<Starman> with relatively low overhead in doing so.
 Generally you can have hundreds or even thousands of concurrent connections
