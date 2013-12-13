@@ -25,8 +25,8 @@ heartbeat application to L<Catalyst>!
 In the past we've discussed in detail how the L<Catalyst> L<PSGI> application
 is created, and did a bit of tracing regarding what happens when a request to
 that application is made.  So at this point you know that L<Catalyst> is using
-the delayed form of a L<PSGI> app, and whats more, it finalizes headers early
-so that you can access to a L<$writer> object, suitable for streaming.  And
+the delayed form of a L<PSGI> app, and what's more, it finalizes headers early
+so you have access to a L<$writer> object, suitable for streaming.  And
 we've discussed how one can use $response->write to write to that, (and briefly
 spoke about chunked transfer encoding.)
 
@@ -68,16 +68,16 @@ a controller is just a class, sometimes we seem to forget).
 
 Its actually quite similar to the plain old PSGI version.  We create a closure
 over an L<AnyEvent> timer watcher, and then call that with the $writer object.
-In L<Catalyst> one gets access to the $writer via the L<Catalyst::Response/res-write_fh>
+In L<Catalyst> one gets access to the $writer via the L<Catalyst::Response/res->write_fh>
 method.  Now, you need to know, once you've requested this object, you are
 expected to close the writer manually.  That's because 'finalize_body'
 checks a flag to see if you've requested the writer and if you have, it skips
 the rest of the body finalization.  You might have noticed that in the code
-to finalize_body, over in L<Catalyst::Engine> (if you don't thi might be a good
+to finalize_body, over in L<Catalyst::Engine> (if you didn't, this might be a good
 time to have a second look).  So, once you've asked for manual control you have
 to drive stick all the way home!
 
-So this works just as it is, but its not a great L<Catalyst> application.  The
+This works just as it is, but its not a great L<Catalyst> application.  The
 controller is pretty heavy and there's no reusable bits.  Lets spend a bit of
 time to refactor this into something that starts to resemble what a L<Catalyst>
 application should be.
@@ -144,8 +144,8 @@ best to take advantage of the bits that L<Moose> gives us.  But all in all it
 basically does the same thing, just this time in a neater package that you can
 write unit tests for, and hopefully this is a step toward reusable code.
 
-Ok, now that we've written the class, how do we expose it to yout L<Catalyst>
-application.  I've always found that L<Catalyst::Model::Adaptor> is pretty
+Ok, now that we've written the class, how do we expose it to your L<Catalyst>
+application.  I've always found L<Catalyst::Model::Adaptor> is pretty
 great at this.  Here's one way to adapt this class for L<Catalyst>, via an
 application specific model:
 
