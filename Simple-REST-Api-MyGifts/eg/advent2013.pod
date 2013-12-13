@@ -1,0 +1,269 @@
+=head2 How to implement a super-simple REST API with Catalyst
+
+=head1 Overview
+
+A simple example implementing and testing a RESTful API.
+
+=head1 Introduction
+
+As client side frameworks are on the rise, more web applications turn to RESTful architecture on the server to better separate concerns. In modern web development, client side JavaScript is responsible for rendering web pages from data it receives from the server (instead of using server side templates such as Template Toolkit).
+The server's job in such an architecture is simply to return data in a format that'll make it easy for the client to parse and render. Different types of data are called resources.
+
+A RESTful web service is a web API that is implemented using HTTP and REST principles to deliver resources to its clients, and to allow clients to manipulate resources in a defined manner.
+RESTful APIs use HTTP verbs and URIs to model the available actions a client can perform on the resources.
+
+Let's take for example a gifts server Santa can use to decide what gifts to give this year. The server provides only one resource (think of a resource as a database table or collection) named Gift. Santa can add gifts to the list, and the elves use the data to deliver the gifts. Each gift has an id, a name, an illustration image and the name of its designated recipient. A RESTful API might expose the Gift collection to clients using the following HTTP calls:
+
+=head4 GET /gifts
+
+A get call on the resource root returns a list of all the items in the collection, but it doesn't have to return the full data for each item. 
+
+=head4 POST /gifts
+
+A post call on the resource root creates a new item. The operation usually returns the new items' URI.
+
+=head4 GET /gifts/7
+
+Each item in the collection is identified with an ID field. A GET call for a specific item retrieves the full information for that item. (in this case, 7 is a specific gift's id).
+
+=head4 PUT /gifts/7
+
+Update the item's data. In this case, we're replacing data for gift with the ID 7.
+
+=head4 DELETE gifts/7
+
+Delete a specific item from the collection.
+
+Given a server that implements all of the above routes, we can easily write client-side code to display and manipulate the resources. Many client side frameworks already know how to work with REST APIs out of the box. 
+
+Let's see how we can implement a Gifts API using catalyst.
+
+=head1 The Application Skeleton
+
+Start with a new catalyst application created with the command line tool:
+  catalyst.pl MyGifts
+  cd MyGifts
+
+Then, add a new JSON view that will render the data:
+  ./script/mygifts_create.pl View JSON JSON
+
+=head1 The Super-Simple Model
+
+To make things easy, we'll go with a really simple model to manage our resource. All it does is keep the list of items in memory as a lexical variable.
+Here's the code to the model, place it under Models directory in a file named Gifts.pm:
+  package MyGifts::Model::Gifts;
+
+  use strict;
+  use base 'Catalyst::Model';
+  use List::Util qw/first max/;
+  use List::MoreUtils qw/first_index/;
+
+  my @data = (
+    { id => 0, name => 'Car', img => 'http://placekitten.com/200/300', to => 'Joe' },
+    { id => 1, name => 'Headphones', img => 'http://placekitten.com/200/300', to => 'Bob' },
+    { id => 2, name => 'Snowman', img => 'http://placekitten.com/200/300', to => 'Mike' },
+  );
+
+  sub all {
+    return [ map { id => $_->{id}, name => $_->{name} }, @data ];
+  }
+
+  sub retrieve {
+    my ( $self, $id ) = @_;
+    return first { $_->{id} == $id } @data;
+  }
+
+  sub add_new {
+    my ( $self, $gift_data ) = @_;
+    # Verify all fields in place
+    return if ! $gift_data->{name} || ! $gift_data->{img};
+
+    my $next_id = max(map $_->{id}, @data) + 1;
+    push @data, { %$gift_data, id => $next_id };
+    return $#data;
+  }
+
+  sub update {
+    my ( $self, $gift_id, $gift_data ) = @_;
+    return if ! defined($gift_data->{name}) ||
+              ! defined($gift_data->{id})   ||
+              ! defined($gift_data->{img});
+
+    my $idx = first_index { $_->{id} == $gift_id } @data;
+    return if ! defined($idx);
+
+    $data[$idx] = { %$gift_data, id => $gift_id };
+    return 1;
+  }
+
+  sub delete_gift {
+    my ( $self, $gift_id ) = @_;
+    my $idx = first_index { $_->{id} == $gift_id } @data;
+
+    return if ! defined($idx);
+
+    splice @data, $idx, 1;
+  }
+
+  # Used for testing purposes
+  sub _get_data { return @data }
+
+Notice how no special code is needed to play friendly with catalyst. It's just a plain old perl class with the right name and base class. 
+
+=head1 A RESTful Controller
+
+Getting the RESTful controller is just a matter of using the correct HTTP verb and Args attributes. Args specifies how many arguments an action consumes, and is used here to differentiate between /gifts and /gifts/2. The verb determines the action.
+  package MyGifts::Controller::Gifts;
+  use Moose;
+  use namespace::autoclean;
+
+  BEGIN { extends 'Catalyst::Controller' }
+
+  __PACKAGE__->config(
+    action => {
+      '*' => {
+        # Attributes common to all actions
+        # in this controller
+        Consumes => 'JSON',
+        Path => '',
+      }
+    }
+  );
+
+  # end action is always called at the end of the route
+  sub end :Private {
+    my ( $self, $c ) = @_;
+  # Render the stash using our JSON view
+    $c->forward($c->view('JSON'));
+  }
+
+  # We use the error action to handle errors
+  sub error :Private {
+    my ( $self, $c, $code, $reason ) = @_;
+    $reason ||= 'Unknown Error';
+    $code ||= 500;
+
+    $c->res->status($code);
+  # Error text is rendered as JSON as well
+    $c->stash->{data} = { error => $reason };
+  }
+
+
+  # List all gifts in the collection
+  # GET /gifts
+  sub list :GET Args(0) {
+    my ( $self, $c ) = @_;
+    $c->stash->{data} = $c->model('Gifts')->all;
+  }
+
+  # Get info on a specific item
+  # GET /gifts/:gift_id
+  sub retrieve :GET Args(1) {
+    my ( $self, $c, $gift_id ) = @_;
+    my $gift = $c->model('Gifts')->retrieve($gift_id);
+
+  # In case of an error, call error action and abort
+    $c->detach('error', [404, "No such gift: $gift_id"]) if ! $gift;
+
+  # If we're here all went well, so fill the stash with our item
+    $c->stash->{data} = $gift;
+  }
+
+  # Create a new item
+  # POST /gifts
+  sub create :POST Args(0) {
+    my ( $self, $c ) = @_;
+    my $gift_data = $c->req->body_data;
+
+    my $id = $c->model('Gifts')->add_new($gift_data);
+
+    $c->detach('error', [400, "Invalid gift data"]) if ! $id;
+
+  # Location header is the route to the new item
+    $c->res->location("/gifts/$id");
+  }
+
+  # Update an existing item
+  # POST /gifts/:gift_id
+  sub update :POST Args(1) {
+    my ( $self, $c, $gift_id ) = @_;
+    my $gift_data = $c->req->body_data;
+
+    my $ok = $c->model('Gifts')->update($gift_id, $gift_data);
+    $c->detach('error', [400, "Fail to update gift: $gift_id"]) if ! $ok;
+  }
+
+  # Delete an item
+  # DELETE /gifts/:gift_id
+  sub delete :DELETE Args(1) {
+    my ( $self, $c, $gift_id ) = @_;
+    my $ok = $c->model('Gifts')->delete_gift($gift_id);
+    $c->detach('error', [400, "Invalid gift id: $gift_id"]) if ! $ok;
+  }
+
+=head1 Testing Our API
+
+To test our API, we'll add a couple of .t files to the t/ directory (or better yet, a subdirectory named after our API). We'll write 4 tests for the following:
+1. Make sure initial list of gifts is the one we put in our model.
+2. Add a new gift
+3. Update an existing gift
+4. Delete a gift
+
+Using Catalyst::Test, we get request and get functions for all our HTTP needs. Here's how the first test looks like:
+  #!/usr/bin/env perl
+  use strict;
+  use warnings;
+  use Test::More;
+  use JSON;
+
+  use Catalyst::Test 'MyGifts';
+  use HTTP::Request::Common;
+  use Test::Deep;
+  use MyGifts::Model::Gifts;
+
+  ##########
+  # Test initial gift list includes all the gifts
+  #
+  my @all_data = MyGifts::Model::Gifts->new->_get_data;
+
+  my $response = get '/gifts';
+
+  my @gifts = @{from_json($response)->{data}};
+  is(@gifts, @all_data, "gift count match");
+
+  for ( my $i=0 ; $i < @all_data; $i++ ) {
+    is(keys %{$gifts[$i]}, 2, "[$i] has 2 data fields");
+    is($gifts[$i]->{name}, $all_data[$i]->{name}, "[$i] name match");
+    is($gifts[$i]->{id}, $all_data[$i]->{id}, "[$i] id match");
+  }
+
+  done_testing();
+
+Full source code for this example (with all 4 tests) is available here:
+https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Simple-REST-API-MyGifts/
+
+=head1 What Next
+
+Now that we understand what REST is and how to implement a super simple RESTful controller, we can start to consider our next steps:
+
+=over
+
+=item 1
+
+Our model is not really suitable for any real application. It's possible to replace it with code that stores data in a filesystem or a database, or just use Catalyst::Model::DBIC::Schema to have our gift mapped to a database table.
+
+=item 2
+
+As your application grows, you may want to consider Catalyst::Controller::REST. It's a base class for RESTful controllers that provides all of the functionality presented here and more.
+
+=back
+
+=head1 Summary
+
+Implementing a RESTful API in catalyst may seem to require a bit more work than alternative frameworks (such as Dancer or Mojolicious). That work pays off. Our simple example code is already nicely arranged in files by functionality. The code is easy to extend and test. 
+
+=head1 Author
+
+Ynon Perek <ynon@ynonperek.com>
+
+
