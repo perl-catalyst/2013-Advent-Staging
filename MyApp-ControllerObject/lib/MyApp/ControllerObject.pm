@@ -26,8 +26,9 @@ sub init_meta {
 }
 
 sub import {
-  use_module($_)->import::into(scalar caller)
-    for shift->importables;
+  Module::Runtime::use_module($_)
+    ->import::into(scalar caller)
+      for shift->importables;
   goto $import;
 }
 
