@@ -1,0 +1,71 @@
+=head1 Title
+
+Plack::Middleware::Debug and Catalyst
+
+=head1 Overview
+
+There are a few useful plack middleware's that can help with day to day development
+of your catalyst application. In this article I'll be giving a quick example of
+how to set them up and a quick run down of the use. Nothing exciting, but it's
+useful stuff.
+
+=head1 Prerequisites
+
+L<Plack::Middleware::Debug> L<Plack::Middleware::Debug::CatalystStash>
+
+=head1 The Code
+
+L<Plack::Middleware::Debug> contains a collection of debug panels, even one for
+showing the contents of the Catalyst Log.
+
+We can enable the middleware in the catalyst app, rather than in the psgi. That
+way we can do some tricks to only enable it for debug mode, or when running on
+certain hosts etc.
+
+    package MyApp;
+    use Moose;
+
+    use Catalyst;
+
+    __PACKAGE__->config(
+        'psgi_middleware', [
+            'Debug' => {panels => [
+                'Memory',
+                'Timer',
+                'CatalystLog',
+                'CatalystStash',
+            ]},
+        ],
+    );
+
+    __PACKAGE__->setup;
+
+This will give us a panel on any page with a </body> tag and a content type of
+text/html the above panels, which can be used to see how much memory was used,
+how long a page request took, what was written to the catalyst log (not including
+the request log) and what is in the stash.
+
+It's only simple, but it all helps.
+
+=head1 See Also
+
+There's a wide selection of Plack debug middlewares available, here's a few that
+are worth investigating.
+
+L<Plack::Middleware::Debug::DBIC::QueryLog>
+
+L<Plack::Middleware::Debug::CatalystPluginCache>
+
+L<Plack::Middleware::Debug::Profiler::NYTProf>
+
+L<Plack::Middleware::Debug::W3CValidate>
+
+L<https://metacpan.org/search?q=plack+middleware+debug>
+
+You can see the code for this article at L<https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Plack-Debug>
+
+=head1 Author
+
+Mark Ellis L<email:nobody@cpan.org>
+
+=cut
