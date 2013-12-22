@@ -5,7 +5,12 @@ use Catalyst;
 
 __PACKAGE__->config(
     'psgi_middleware', [
-        'Debug' => {panels => [qw/DBITrace Memory Timer CatalystStash CatalystLog/]},
+        'Debug' => {panels => [
+            'Memory',
+            'Timer',
+            'CatalystLog',
+            'CatalystStash',
+        ]},
     ],
 );
 
