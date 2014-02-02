@@ -240,7 +240,7 @@ Using Catalyst::Test, we get request and get functions for all our HTTP needs. H
   done_testing();
 
 Full source code for this example (with all 4 tests) is available here:
-https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Simple-REST-API-MyGifts/
+https://github.com/perl-catalyst/2013-Advent-Staging/tree/master/Simple-REST-Api-MyGifts
 
 =head1 What Next
 
