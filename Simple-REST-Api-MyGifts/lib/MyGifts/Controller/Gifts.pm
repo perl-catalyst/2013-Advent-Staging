@@ -69,8 +69,8 @@ sub create :POST Args(0) {
 }
 
 # Update an existing item
-# POST /gifts/:gift_id
-sub update :POST Args(1) {
+# PUT /gifts/:gift_id
+sub update :PUT Args(1) {
   my ( $self, $c, $gift_id ) = @_;
   my $gift_data = $c->req->body_data;
 
