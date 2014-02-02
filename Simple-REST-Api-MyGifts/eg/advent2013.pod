@@ -51,6 +51,7 @@ Then, add a new JSON view that will render the data:
 
 To make things easy, we'll go with a really simple model to manage our resource. All it does is keep the list of items in memory as a lexical variable.
 Here's the code to the model, place it under Models directory in a file named Gifts.pm:
+
   package MyGifts::Model::Gifts;
 
   use strict;
@@ -113,6 +114,7 @@ Notice how no special code is needed to play friendly with catalyst. It's just a
 =head1 A RESTful Controller
 
 Getting the RESTful controller is just a matter of using the correct HTTP verb and Args attributes. Args specifies how many arguments an action consumes, and is used here to differentiate between /gifts and /gifts/2. The verb determines the action.
+
   package MyGifts::Controller::Gifts;
   use Moose;
   use namespace::autoclean;
@@ -210,6 +212,7 @@ To test our API, we'll add a couple of .t files to the t/ directory (or better y
 4. Delete a gift
 
 Using Catalyst::Test, we get request and get functions for all our HTTP needs. Here's how the first test looks like:
+
   #!/usr/bin/env perl
   use strict;
   use warnings;
