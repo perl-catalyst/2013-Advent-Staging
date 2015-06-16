@@ -10,6 +10,7 @@ my $app = Plack::Util::load_psgi "${Bin}/myapp.psgi";
 
 my $mech = Test::WWW::Mechanize::PSGI->new(
     app => $app,
+    stack_depth => 0,
 );
 
 my $start_mem = get_mem();
